@@ -1,0 +1,42 @@
+# Traefik Static Configuration
+
+# API and Dashboard
+api:
+  dashboard: true
+  insecure: true
+
+# Entry Points
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+# Providers
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: loom_network
+    watch: true
+  file:
+    directory: "/etc/traefik/dynamic"
+    watch: true
+
+# Logging
+log:
+  level: INFO
+  format: common
+
+# Access Logs
+accessLog:
+  format: common
+
+# Let's Encrypt (optional - for production)
+# certificatesResolvers:
+#   letsencrypt:
+#     acme:
+#       email: admin@pandaserver.ddns.net
+#       storage: /letsencrypt/acme.json
+#       httpChallenge:
+#         entryPoint: web
