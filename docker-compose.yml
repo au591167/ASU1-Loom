@@ -1,28 +1,6 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: loom_postgres
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-loom_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-loom_password}
-      POSTGRES_DB: ${POSTGRES_DB:-loom_db}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
-    networks:
-      - loom_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-loom_user}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # Traefik Reverse Proxy
   traefik:
     image: traefik:v2.10
@@ -72,9 +50,6 @@ services:
       - "8000:8000"
     networks:
       - loom_network
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
@@ -107,7 +82,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
-    name: loom_postgres_data
   traefik_certs:
     name: loom_traefik_certs
