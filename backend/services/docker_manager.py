@@ -24,10 +24,14 @@ class DockerManager:
         try:
             self.client = docker.DockerClient(base_url=settings.DOCKER_HOST)
             self.api_client = docker.APIClient(base_url=settings.DOCKER_HOST)
-            logger.info(f"✅ Docker client initialized: {self.client.version()['Version']}")
+            logger.info(f"Docker client initialized: {self.client.version()['Version']}")
+            self.docker_available = True
         except DockerException as e:
-            logger.error(f"❌ Failed to initialize Docker client: {e}")
-            raise
+            logger.warning(f"Docker client not available: {e}")
+            logger.warning("Running in mock mode - container operations will be simulated")
+            self.client = None
+            self.api_client = None
+            self.docker_available = False
     
     async def create_container(
         self,
@@ -47,7 +51,7 @@ class DockerManager:
     ) -> Dict[str, Any]:
         """
         Create a new Docker container with Traefik labels
-        
+
         Args:
             name: Container name
             image: Docker image name
@@ -62,17 +66,29 @@ class DockerManager:
             cpu_limit: CPU limit (e.g., "0.5")
             restart_policy: Restart policy
             labels: Custom labels
-        
+
         Returns:
             Dictionary with container information
         """
+        if not self.docker_available:
+            # Mock implementation for demo
+            import uuid
+            mock_id = str(uuid.uuid4())[:12]
+            logger.info(f"Mock: Creating container: {name} (ID: {mock_id})")
+            return {
+                "id": mock_id,
+                "name": name,
+                "status": "created",
+                "image": f"{image}:{tag}",
+            }
+
         try:
             full_image = f"{image}:{tag}"
-            
+
             # Pull image if not exists
             logger.info(f"Pulling image: {full_image}")
             await asyncio.to_thread(self.client.images.pull, image, tag=tag)
-            
+
             # Prepare Traefik labels
             traefik_labels = {
                 "traefik.enable": "true",
@@ -81,37 +97,37 @@ class DockerManager:
                 f"traefik.http.services.{name}.loadbalancer.server.port": str(internal_port),
                 "traefik.docker.network": settings.DOCKER_NETWORK,
             }
-            
+
             # Merge with custom labels
             if labels:
                 traefik_labels.update(labels)
-            
+
             # Prepare port bindings
             ports = {}
             if external_port:
                 ports[f"{internal_port}/tcp"] = external_port
-            
+
             # Prepare restart policy
             restart_policy_config = {"Name": restart_policy}
-            
+
             # Prepare resource limits
             host_config_params = {
                 "restart_policy": restart_policy_config,
                 "network_mode": settings.DOCKER_NETWORK,
             }
-            
+
             if memory_limit:
                 host_config_params["mem_limit"] = memory_limit
-            
+
             if cpu_limit:
                 host_config_params["nano_cpus"] = int(float(cpu_limit) * 1e9)
-            
+
             if ports:
                 host_config_params["port_bindings"] = ports
-            
+
             if volumes:
                 host_config_params["binds"] = volumes
-            
+
             # Create container
             logger.info(f"Creating container: {name}")
             container = await asyncio.to_thread(
@@ -124,56 +140,72 @@ class DockerManager:
                 detach=True,
                 **host_config_params
             )
-            
-            logger.info(f"✅ Container created: {name} ({container.id[:12]})")
-            
+
+            logger.info(f"Container created: {name} ({container.id[:12]})")
+
             return {
                 "id": container.id,
                 "name": name,
                 "status": "created",
                 "image": full_image,
             }
-            
+
         except DockerException as e:
             logger.error(f"❌ Failed to create container {name}: {e}")
             raise
     
     async def start_container(self, container_id: str) -> Dict[str, Any]:
         """Start a container"""
+        if not self.docker_available:
+            logger.info(f"Mock: Starting container: {container_id}")
+            return {
+                "id": container_id,
+                "name": f"mock-{container_id[:8]}",
+                "status": "running",
+            }
+
         try:
             container = self.client.containers.get(container_id)
             await asyncio.to_thread(container.start)
-            logger.info(f"✅ Container started: {container.name}")
-            
+            logger.info(f"Container started: {container.name}")
+
             return {
                 "id": container.id,
                 "name": container.name,
                 "status": "running",
             }
         except NotFound:
-            logger.error(f"❌ Container not found: {container_id}")
+            logger.error(f"Container not found: {container_id}")
             raise
         except DockerException as e:
-            logger.error(f"❌ Failed to start container: {e}")
+            logger.error(f"Failed to start container: {e}")
             raise
     
     async def stop_container(self, container_id: str, timeout: int = 10) -> Dict[str, Any]:
         """Stop a container"""
+        if not self.docker_available:
+            logger.info(f"Mock: Stopping container: {container_id}")
+            return {
+                "id": container_id,
+                "name": f"mock-{container_id[:8]}",
+                "status": "stopped",
+            }
+
         try:
             container = self.client.containers.get(container_id)
             await asyncio.to_thread(container.stop, timeout=timeout)
-            logger.info(f"✅ Container stopped: {container.name}")
-            
+            logger.info(f"Container stopped: {container.name}")
+
             return {
                 "id": container.id,
                 "name": container.name,
                 "status": "stopped",
             }
         except NotFound:
-            logger.error(f"❌ Container not found: {container_id}")
+            logger.error(f"Container not found: {container_id}")
             raise
         except DockerException as e:
-            logger.error(f"❌ Failed to stop container: {e}")
+            logger.error(f"Failed to stop container: {e}")
             raise
     
     async def restart_container(self, container_id: str, timeout: int = 10) -> Dict[str, Any]:
@@ -181,7 +213,7 @@ class DockerManager:
         try:
             container = self.client.containers.get(container_id)
             await asyncio.to_thread(container.restart, timeout=timeout)
-            logger.info(f"✅ Container restarted: {container.name}")
+            logger.info(f"Container restarted: {container.name}")
             
             return {
                 "id": container.id,
@@ -189,10 +221,10 @@ class DockerManager:
                 "status": "running",
             }
         except NotFound:
-            logger.error(f"❌ Container not found: {container_id}")
+            logger.error(f"Container not found: {container_id}")
             raise
         except DockerException as e:
-            logger.error(f"❌ Failed to restart container: {e}")
+            logger.error(f"Failed to restart container: {e}")
             raise
     
     async def delete_container(self, container_id: str, force: bool = False) -> bool:
@@ -201,13 +233,13 @@ class DockerManager:
             container = self.client.containers.get(container_id)
             container_name = container.name
             await asyncio.to_thread(container.remove, force=force)
-            logger.info(f"✅ Container deleted: {container_name}")
+            logger.info(f"Container deleted: {container_name}")
             return True
         except NotFound:
-            logger.error(f"❌ Container not found: {container_id}")
+            logger.error(f"Container not found: {container_id}")
             raise
         except DockerException as e:
-            logger.error(f"❌ Failed to delete container: {e}")
+            logger.error(f"Failed to delete container: {e}")
             raise
     
     async def get_container_stats(self, container_id: str) -> Dict[str, Any]:
@@ -234,10 +266,10 @@ class DockerManager:
                 "network_tx": stats["networks"]["eth0"]["tx_bytes"] if "networks" in stats else 0,
             }
         except NotFound:
-            logger.error(f"❌ Container not found: {container_id}")
+            logger.error(f"Container not found: {container_id}")
             raise
         except DockerException as e:
-            logger.error(f"❌ Failed to get container stats: {e}")
+            logger.error(f"Failed to get container stats: {e}")
             raise
     
     async def list_containers(self, all: bool = True) -> List[Dict[str, Any]]:
@@ -259,10 +291,22 @@ class DockerManager:
     
     async def get_system_info(self) -> Dict[str, Any]:
         """Get Docker system information"""
+        if not self.docker_available:
+            logger.info("🎭 Mock: Getting system info")
+            return {
+                "docker_version": "Mock 24.0.0",
+                "containers": 0,
+                "containers_running": 0,
+                "containers_stopped": 0,
+                "images": 0,
+                "memory_total": 8 * 1024**3,  # 8GB
+                "cpus": 4,
+            }
+
         try:
             info = await asyncio.to_thread(self.client.info)
             version = await asyncio.to_thread(self.client.version)
-            
+
             return {
                 "docker_version": version["Version"],
                 "containers": info["Containers"],

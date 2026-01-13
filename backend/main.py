@@ -4,14 +4,19 @@ Main entry point for the FastAPI application with GraphQL endpoint
 """
 
 import asyncio
+import sys
+import platform
 from contextlib import asynccontextmanager
+
+# Fix for Windows ProactorEventLoop incompatibility with psycopg
+if platform.system() == 'Windows':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import strawberry
 from strawberry.fastapi import GraphQLRouter
 from loguru import logger
-import sys
 
 from config.settings import settings
 from database.connection import engine, init_db
@@ -39,26 +44,26 @@ async def lifespan(app: FastAPI):
     Lifespan context manager for startup and shutdown events
     """
     # Startup
-    logger.info("🚀 Starting ASU1-Loom Backend Server...")
+    logger.info("Starting ASU1-Loom Backend Server...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"API Host: {settings.API_HOST}:{settings.API_PORT}")
-    
+
     # Initialize database
     try:
         await init_db()
-        logger.info("✅ Database initialized successfully")
+        logger.info("Database initialized successfully")
     except Exception as e:
-        logger.error(f"❌ Database initialization failed: {e}")
+        logger.error(f"Database initialization failed: {e}")
         raise
-    
-    logger.info("✅ ASU1-Loom Backend Server started successfully")
-    
+
+    logger.info("ASU1-Loom Backend Server started successfully")
+
     yield
-    
+
     # Shutdown
-    logger.info("🛑 Shutting down ASU1-Loom Backend Server...")
-    await engine.dispose()
-    logger.info("✅ Cleanup completed")
+    logger.info("Shutting down ASU1-Loom Backend Server...")
+    engine.dispose()
+    logger.info("Cleanup completed")
 
 
 # Create FastAPI application

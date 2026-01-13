@@ -6,13 +6,23 @@ Defines queries and mutations for container management
 import strawberry
 from typing import List, Optional
 from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy import cast, Integer, String
+from database.connection import get_db
+from models.container import Container
+from services.docker_manager import docker_manager
+from services.modpack_service import get_modpack_manager
+from loguru import logger
+
+# Import JSON type for Strawberry
+JSON = strawberry.scalars.JSON
 
 
 # GraphQL Types
 @strawberry.type
 class ContainerType:
     """GraphQL type for Container"""
-    id: int
+    id: strawberry.ID
     container_id: Optional[str]
     name: str
     image: str
@@ -20,20 +30,25 @@ class ContainerType:
     subdomain: str
     internal_port: int
     external_port: Optional[int]
-    environment_vars: strawberry.scalars.JSON
-    volumes: strawberry.scalars.JSON
+    environment_vars: JSON
+    volumes: JSON
     command: Optional[str]
     memory_limit: Optional[str]
     cpu_limit: Optional[str]
     status: str
     restart_policy: str
     description: Optional[str]
-    labels: strawberry.scalars.JSON
+    labels: JSON
     created_at: datetime
     updated_at: datetime
     started_at: Optional[datetime]
     stopped_at: Optional[datetime]
     user_id: Optional[int]
+    
+    @strawberry.field
+    def port(self) -> int:
+        """Alias for internal_port for frontend compatibility"""
+        return self.internal_port
 
 
 @strawberry.type
@@ -71,6 +86,49 @@ class SystemInfoType:
     system_cpu: str
 
 
+@strawberry.type
+class ModpackType:
+    """GraphQL type for Modpack"""
+    id: str
+    name: str
+    slug: str
+    summary: Optional[str]
+    description: Optional[str]
+    icon_url: Optional[str]
+    author: str
+    download_count: int
+    date_created: Optional[str]
+    date_modified: Optional[str]
+    source: str  # curseforge, modrinth, ftb
+
+
+@strawberry.type
+class ModpackVersionType:
+    """GraphQL type for Modpack Version"""
+    version_id: str
+    version_number: Optional[str]
+    version_name: Optional[str]
+    minecraft_versions: Optional[List[str]]
+    loaders: Optional[List[str]]
+    release_type: Optional[str]
+    date_published: Optional[str]
+    downloads: Optional[int]
+    file_name: Optional[str]
+    file_size: Optional[int]
+    download_url: Optional[str]
+
+
+@strawberry.type
+class ModpackDownloadProgressType:
+    """GraphQL type for Modpack Download Progress"""
+    container_id: int
+    modpack_id: str
+    status: str  # pending, downloading, extracting, installing, complete, failed
+    progress: int  # 0-100
+    message: Optional[str]
+    error_message: Optional[str]
+
+
 # Input Types
 @strawberry.input
 class CreateContainerInput:
@@ -81,108 +139,577 @@ class CreateContainerInput:
     subdomain: str
     internal_port: int
     external_port: Optional[int] = None
-    environment_vars: Optional[strawberry.scalars.JSON] = None
-    volumes: Optional[strawberry.scalars.JSON] = None
+    environment_vars: Optional[JSON] = None
+    volumes: Optional[JSON] = None
     command: Optional[str] = None
     memory_limit: Optional[str] = None
     cpu_limit: Optional[str] = None
     restart_policy: str = "unless-stopped"
     description: Optional[str] = None
-    labels: Optional[strawberry.scalars.JSON] = None
+    labels: Optional[JSON] = None
+
+
+# Duplicate input type for frontend compatibility (frontend uses ContainerInput)
+@strawberry.input
+class ContainerInput:
+    """Input type for creating a container (frontend compatibility alias)"""
+    name: str
+    image: str
+    tag: str = "latest"
+    subdomain: str
+    internal_port: int
+    external_port: Optional[int] = None
+    environment_vars: Optional[JSON] = None
+    volumes: Optional[JSON] = None
+    command: Optional[str] = None
+    memory_limit: Optional[str] = None
+    cpu_limit: Optional[str] = None
+    restart_policy: str = "unless-stopped"
+    description: Optional[str] = None
+    labels: Optional[JSON] = None
 
 
 @strawberry.input
 class UpdateContainerInput:
     """Input type for updating a container"""
     name: Optional[str] = None
-    environment_vars: Optional[strawberry.scalars.JSON] = None
+    environment_vars: Optional[JSON] = None
     memory_limit: Optional[str] = None
     cpu_limit: Optional[str] = None
     description: Optional[str] = None
-    labels: Optional[strawberry.scalars.JSON] = None
+    labels: Optional[JSON] = None
 
 
 # Query
 @strawberry.type
 class Query:
     """GraphQL Queries"""
-    
+
     @strawberry.field
     async def containers(self) -> List[ContainerType]:
         """Get all containers"""
-        # TODO: Implement
-        return []
+        try:
+            db = next(get_db())
+            containers = db.query(Container).all()
+            return [
+                ContainerType(
+                    id=c.id,
+                    container_id=c.container_id,
+                    name=c.name,
+                    image=c.image,
+                    tag=c.tag,
+                    subdomain=c.subdomain,
+                    internal_port=c.internal_port,
+                    external_port=c.external_port,
+                    environment_vars=c.environment_vars,
+                    volumes=c.volumes,
+                    command=c.command,
+                    memory_limit=c.memory_limit,
+                    cpu_limit=c.cpu_limit,
+                    status=c.status,
+                    restart_policy=c.restart_policy,
+                    description=c.description,
+                    labels=c.labels,
+                    created_at=c.created_at,
+                    updated_at=c.updated_at,
+                    started_at=c.started_at,
+                    stopped_at=c.stopped_at,
+                    user_id=c.user_id,
+                )
+                for c in containers
+            ]
+        except Exception as e:
+            logger.error(f"Error fetching containers: {e}")
+            return []
     
     @strawberry.field
-    async def container(self, id: int) -> Optional[ContainerType]:
+    async def container(self, id: strawberry.ID) -> Optional[ContainerType]:
         """Get container by ID"""
-        # TODO: Implement
+        try:
+            db = next(get_db())
+            c = db.query(Container).filter(Container.id == int(id)).first()
+            if c:
+                return ContainerType(
+                    id=c.id,
+                    container_id=c.container_id,
+                    name=c.name,
+                    image=c.image,
+                    tag=c.tag,
+                    subdomain=c.subdomain,
+                    internal_port=c.internal_port,
+                    external_port=c.external_port,
+                    environment_vars=c.environment_vars,
+                    volumes=c.volumes,
+                    command=c.command,
+                    memory_limit=c.memory_limit,
+                    cpu_limit=c.cpu_limit,
+                    status=c.status,
+                    restart_policy=c.restart_policy,
+                    description=c.description,
+                    labels=c.labels,
+                    created_at=c.created_at,
+                    updated_at=c.updated_at,
+                    started_at=c.started_at,
+                    stopped_at=c.stopped_at,
+                    user_id=c.user_id,
+                )
+        except Exception as e:
+            logger.error(f"Error fetching container {id}: {e}")
         return None
-    
+
     @strawberry.field
     async def container_by_name(self, name: str) -> Optional[ContainerType]:
         """Get container by name"""
-        # TODO: Implement
+        try:
+            db = next(get_db())
+            c = db.query(Container).filter(Container.name == name).first()
+            if c:
+                return ContainerType(
+                    id=c.id,
+                    container_id=c.container_id,
+                    name=c.name,
+                    image=c.image,
+                    tag=c.tag,
+                    subdomain=c.subdomain,
+                    internal_port=c.internal_port,
+                    external_port=c.external_port,
+                    environment_vars=c.environment_vars,
+                    volumes=c.volumes,
+                    command=c.command,
+                    memory_limit=c.memory_limit,
+                    cpu_limit=c.cpu_limit,
+                    status=c.status,
+                    restart_policy=c.restart_policy,
+                    description=c.description,
+                    labels=c.labels,
+                    created_at=c.created_at,
+                    updated_at=c.updated_at,
+                    started_at=c.started_at,
+                    stopped_at=c.stopped_at,
+                    user_id=c.user_id,
+                )
+        except Exception as e:
+            logger.error(f"Error fetching container by name {name}: {e}")
         return None
-    
+
     @strawberry.field
-    async def container_stats(self, id: int) -> Optional[ContainerStatsType]:
+    async def container_stats(self, id: strawberry.ID) -> Optional[ContainerStatsType]:
         """Get container statistics"""
-        # TODO: Implement
+        try:
+            db = next(get_db())
+            c = db.query(Container).filter(Container.id == int(id)).first()
+            if c and c.container_id:
+                stats = await docker_manager.get_container_stats(c.container_id)
+                return ContainerStatsType(
+                    cpu_usage=stats["cpu_usage"],
+                    memory_usage=stats["memory_usage"],
+                    memory_limit=stats["memory_limit"],
+                    network_rx=stats["network_rx"],
+                    network_tx=stats["network_tx"],
+                )
+        except Exception as e:
+            logger.error(f"Error fetching container stats {id}: {e}")
         return None
-    
+
     @strawberry.field
     async def system_info(self) -> SystemInfoType:
         """Get system information"""
+        try:
+            info = await docker_manager.get_system_info()
+            return SystemInfoType(
+                total_containers=info["containers"],
+                running_containers=info["containers_running"],
+                stopped_containers=info["containers_stopped"],
+                total_images=info["images"],
+                docker_version=info["docker_version"],
+                system_memory=f"{info['memory_total'] // (1024**3)} GB",
+                system_cpu=str(info["cpus"]),
+            )
+        except Exception as e:
+            logger.error(f"Error fetching system info: {e}")
+            return SystemInfoType(
+                total_containers=0,
+                running_containers=0,
+                stopped_containers=0,
+                total_images=0,
+                docker_version="unknown",
+                system_memory="unknown",
+                system_cpu="unknown",
+            )
+    
+    @strawberry.field
+    async def search_modpacks(
+        self,
+        query: str,
+        source: str = "all",
+        minecraft_version: Optional[str] = None,
+        loader_type: Optional[str] = None
+    ) -> List[ModpackType]:
+        """Search for modpacks across multiple sources"""
+        try:
+            modpack_manager = get_modpack_manager()
+            results = await modpack_manager.search_modpacks(
+                query=query,
+                source=source,
+                minecraft_version=minecraft_version,
+                loader_type=loader_type
+            )
+            return [
+                ModpackType(
+                    id=r["id"],
+                    name=r["name"],
+                    slug=r["slug"],
+                    summary=r.get("summary"),
+                    description=r.get("description"),
+                    icon_url=r.get("icon_url"),
+                    author=r["author"],
+                    download_count=r["download_count"],
+                    date_created=r.get("date_created"),
+                    date_modified=r.get("date_modified"),
+                    source=r["source"]
+                )
+                for r in results
+            ]
+        except Exception as e:
+            logger.error(f"Error searching modpacks: {e}")
+            return []
+    
+    @strawberry.field
+    async def get_modpack(self, source: str, modpack_id: str) -> Optional[ModpackType]:
+        """Get detailed information about a modpack"""
         # TODO: Implement
-        return SystemInfoType(
-            total_containers=0,
-            running_containers=0,
-            stopped_containers=0,
-            total_images=0,
-            docker_version="unknown",
-            system_memory="unknown",
-            system_cpu="unknown",
-        )
+        return None
+    
+    @strawberry.field
+    async def get_modpack_versions(
+        self,
+        source: str,
+        modpack_id: str
+    ) -> List[ModpackVersionType]:
+        """Get available versions for a modpack"""
+        # TODO: Implement
+        return []
 
 
 # Mutation
 @strawberry.type
 class Mutation:
     """GraphQL Mutations"""
-    
+
     @strawberry.mutation
-    async def create_container(self, input: CreateContainerInput) -> ContainerType:
+    async def create_container(self, input: ContainerInput) -> ContainerType:
         """Create a new container"""
-        # TODO: Implement
-        raise NotImplementedError("create_container not yet implemented")
+        try:
+            # Create container in Docker
+            docker_result = await docker_manager.create_container(
+                name=input.name,
+                image=input.image,
+                tag=input.tag,
+                subdomain=input.subdomain,
+                internal_port=input.internal_port,
+                external_port=input.external_port,
+                environment=input.environment_vars,
+                volumes=input.volumes,
+                command=input.command,
+                memory_limit=input.memory_limit,
+                cpu_limit=input.cpu_limit,
+                restart_policy=input.restart_policy,
+                labels=input.labels,
+            )
+
+            # Save to database
+            db = next(get_db())
+            container = Container(
+                container_id=docker_result["id"],
+                name=input.name,
+                image=input.image,
+                tag=input.tag,
+                subdomain=input.subdomain,
+                internal_port=input.internal_port,
+                external_port=input.external_port,
+                environment_vars=input.environment_vars or {},
+                volumes=input.volumes or [],
+                command=input.command,
+                memory_limit=input.memory_limit,
+                cpu_limit=input.cpu_limit,
+                status="created",
+                restart_policy=input.restart_policy,
+                description=input.description,
+                labels=input.labels or {},
+            )
+            db.add(container)
+            db.commit()
+            db.refresh(container)
+
+            logger.info(f"Created container: {input.name}")
+
+            return ContainerType(
+                id=container.id,
+                container_id=container.container_id,
+                name=container.name,
+                image=container.image,
+                tag=container.tag,
+                subdomain=container.subdomain,
+                internal_port=container.internal_port,
+                external_port=container.external_port,
+                environment_vars=container.environment_vars,
+                volumes=container.volumes,
+                command=container.command,
+                memory_limit=container.memory_limit,
+                cpu_limit=container.cpu_limit,
+                status=container.status,
+                restart_policy=container.restart_policy,
+                description=container.description,
+                labels=container.labels,
+                created_at=container.created_at,
+                updated_at=container.updated_at,
+                started_at=container.started_at,
+                stopped_at=container.stopped_at,
+                user_id=container.user_id,
+            )
+        except Exception as e:
+            logger.error(f"Error creating container: {e}")
+            raise
     
     @strawberry.mutation
-    async def update_container(self, id: int, input: UpdateContainerInput) -> ContainerType:
+    async def update_container(self, id: strawberry.ID, input: UpdateContainerInput) -> ContainerType:
         """Update an existing container"""
-        # TODO: Implement
-        raise NotImplementedError("update_container not yet implemented")
-    
+        try:
+            db = next(get_db())
+            container = db.query(Container).filter(Container.id == int(id)).first()
+            if not container:
+                raise ValueError(f"Container {id} not found")
+
+            # Update fields
+            if input.name is not None:
+                container.name = input.name
+            if input.environment_vars is not None:
+                container.environment_vars = input.environment_vars
+            if input.memory_limit is not None:
+                container.memory_limit = input.memory_limit
+            if input.cpu_limit is not None:
+                container.cpu_limit = input.cpu_limit
+            if input.description is not None:
+                container.description = input.description
+            if input.labels is not None:
+                container.labels = input.labels
+
+            db.commit()
+            db.refresh(container)
+
+            logger.info(f"Updated container: {container.name}")
+
+            return ContainerType(
+                id=container.id,
+                container_id=container.container_id,
+                name=container.name,
+                image=container.image,
+                tag=container.tag,
+                subdomain=container.subdomain,
+                internal_port=container.internal_port,
+                external_port=container.external_port,
+                environment_vars=container.environment_vars,
+                volumes=container.volumes,
+                command=container.command,
+                memory_limit=container.memory_limit,
+                cpu_limit=container.cpu_limit,
+                status=container.status,
+                restart_policy=container.restart_policy,
+                description=container.description,
+                labels=container.labels,
+                created_at=container.created_at,
+                updated_at=container.updated_at,
+                started_at=container.started_at,
+                stopped_at=container.stopped_at,
+                user_id=container.user_id,
+            )
+        except Exception as e:
+            logger.error(f"Error updating container {id}: {e}")
+            raise
+
     @strawberry.mutation
-    async def delete_container(self, id: int) -> bool:
+    async def delete_container(self, id: strawberry.ID) -> bool:
         """Delete a container"""
-        # TODO: Implement
-        return False
-    
+        try:
+            db = next(get_db())
+            container = db.query(Container).filter(Container.id == int(id)).first()
+            if not container:
+                return False
+
+            # Delete from Docker if it exists
+            if container.container_id:
+                try:
+                    await docker_manager.delete_container(container.container_id, force=True)
+                except Exception as e:
+                    logger.warning(f"Failed to delete container from Docker: {e}")
+
+            # Delete from database
+            db.delete(container)
+            db.commit()
+
+            logger.info(f"Deleted container: {container.name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting container {id}: {e}")
+            return False
+
     @strawberry.mutation
-    async def start_container(self, id: int) -> ContainerType:
+    async def start_container(self, id: strawberry.ID) -> ContainerType:
         """Start a container"""
-        # TODO: Implement
-        raise NotImplementedError("start_container not yet implemented")
-    
+        try:
+            db = next(get_db())
+            container = db.query(Container).filter(Container.id == int(id)).first()
+            if not container or not container.container_id:
+                raise ValueError(f"Container {id} not found or has no container_id")
+
+            # Start in Docker
+            await docker_manager.start_container(container.container_id)
+
+            # Update database
+            container.status = "running"
+            container.started_at = datetime.utcnow()
+            container.stopped_at = None
+            db.commit()
+            db.refresh(container)
+
+            logger.info(f"Started container: {container.name}")
+
+            return ContainerType(
+                id=container.id,
+                container_id=container.container_id,
+                name=container.name,
+                image=container.image,
+                tag=container.tag,
+                subdomain=container.subdomain,
+                internal_port=container.internal_port,
+                external_port=container.external_port,
+                environment_vars=container.environment_vars,
+                volumes=container.volumes,
+                command=container.command,
+                memory_limit=container.memory_limit,
+                cpu_limit=container.cpu_limit,
+                status=container.status,
+                restart_policy=container.restart_policy,
+                description=container.description,
+                labels=container.labels,
+                created_at=container.created_at,
+                updated_at=container.updated_at,
+                started_at=container.started_at,
+                stopped_at=container.stopped_at,
+                user_id=container.user_id,
+            )
+        except Exception as e:
+            logger.error(f"Error starting container {id}: {e}")
+            raise
+
     @strawberry.mutation
-    async def stop_container(self, id: int) -> ContainerType:
+    async def stop_container(self, id: strawberry.ID) -> ContainerType:
         """Stop a container"""
-        # TODO: Implement
-        raise NotImplementedError("stop_container not yet implemented")
+        try:
+            db = next(get_db())
+            container = db.query(Container).filter(Container.id == int(id)).first()
+            if not container or not container.container_id:
+                raise ValueError(f"Container {id} not found or has no container_id")
+
+            # Stop in Docker
+            await docker_manager.stop_container(container.container_id)
+
+            # Update database
+            container.status = "stopped"
+            container.stopped_at = datetime.utcnow()
+            db.commit()
+            db.refresh(container)
+
+            logger.info(f"Stopped container: {container.name}")
+
+            return ContainerType(
+                id=container.id,
+                container_id=container.container_id,
+                name=container.name,
+                image=container.image,
+                tag=container.tag,
+                subdomain=container.subdomain,
+                internal_port=container.internal_port,
+                external_port=container.external_port,
+                environment_vars=container.environment_vars,
+                volumes=container.volumes,
+                command=container.command,
+                memory_limit=container.memory_limit,
+                cpu_limit=container.cpu_limit,
+                status=container.status,
+                restart_policy=container.restart_policy,
+                description=container.description,
+                labels=container.labels,
+                created_at=container.created_at,
+                updated_at=container.updated_at,
+                started_at=container.started_at,
+                stopped_at=container.stopped_at,
+                user_id=container.user_id,
+            )
+        except Exception as e:
+            logger.error(f"Error stopping container {id}: {e}")
+            raise
+
+    @strawberry.mutation
+    async def restart_container(self, id: strawberry.ID) -> ContainerType:
+        """Restart a container"""
+        try:
+            db = next(get_db())
+            container = db.query(Container).filter(Container.id == int(id)).first()
+            if not container or not container.container_id:
+                raise ValueError(f"Container {id} not found or has no container_id")
+
+            # Restart in Docker
+            await docker_manager.restart_container(container.container_id)
+
+            # Update database
+            container.status = "running"
+            container.started_at = datetime.utcnow()
+            container.stopped_at = None
+            db.commit()
+            db.refresh(container)
+
+            logger.info(f"Restarted container: {container.name}")
+
+            return ContainerType(
+                id=container.id,
+                container_id=container.container_id,
+                name=container.name,
+                image=container.image,
+                tag=container.tag,
+                subdomain=container.subdomain,
+                internal_port=container.internal_port,
+                external_port=container.external_port,
+                environment_vars=container.environment_vars,
+                volumes=container.volumes,
+                command=container.command,
+                memory_limit=container.memory_limit,
+                cpu_limit=container.cpu_limit,
+                status=container.status,
+                restart_policy=container.restart_policy,
+                description=container.description,
+                labels=container.labels,
+                created_at=container.created_at,
+                updated_at=container.updated_at,
+                started_at=container.started_at,
+                stopped_at=container.stopped_at,
+                user_id=container.user_id,
+            )
+        except Exception as e:
+            logger.error(f"Error restarting container {id}: {e}")
+            raise
     
     @strawberry.mutation
-    async def restart_container(self, id: int) -> ContainerType:
-        """Restart a container"""
+    async def create_container_with_modpack(
+        self,
+        name: str,
+        subdomain: str,
+        source: str,
+        modpack_id: str,
+        version_id: str,
+        memory_limit: Optional[str] = None,
+        cpu_limit: Optional[str] = None
+    ) -> ContainerType:
+        """Create a container with a modpack pre-installed"""
         # TODO: Implement
-        raise NotImplementedError("restart_container not yet implemented")
+        raise NotImplementedError("create_container_with_modpack not yet implemented")
