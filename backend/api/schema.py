@@ -6,8 +6,7 @@ Defines queries and mutations for container management
 import strawberry
 from typing import List, Optional
 from datetime import datetime
-from sqlalchemy.orm import Session
-from sqlalchemy import cast, Integer, String
+from sqlalchemy import select
 from database.connection import get_db
 from models.container import Container
 from services.docker_manager import docker_manager
@@ -188,128 +187,150 @@ class Query:
     @strawberry.field
     async def containers(self) -> List[ContainerType]:
         """Get all containers"""
-        try:
-            db = next(get_db())
-            containers = db.query(Container).all()
-            return [
-                ContainerType(
-                    id=c.id,
-                    container_id=c.container_id,
-                    name=c.name,
-                    image=c.image,
-                    tag=c.tag,
-                    subdomain=c.subdomain,
-                    internal_port=c.internal_port,
-                    external_port=c.external_port,
-                    environment_vars=c.environment_vars,
-                    volumes=c.volumes,
-                    command=c.command,
-                    memory_limit=c.memory_limit,
-                    cpu_limit=c.cpu_limit,
-                    status=c.status,
-                    restart_policy=c.restart_policy,
-                    description=c.description,
-                    labels=c.labels,
-                    created_at=c.created_at,
-                    updated_at=c.updated_at,
-                    started_at=c.started_at,
-                    stopped_at=c.stopped_at,
-                    user_id=c.user_id,
+        async for session in get_db():
+            try:
+                result = await session.execute(
+                    select(Container).order_by(Container.created_at.desc())
                 )
-                for c in containers
-            ]
-        except Exception as e:
-            logger.error(f"Error fetching containers: {e}")
-            return []
+                containers = result.scalars().all()
+                return [
+                    ContainerType(
+                        id=c.id,
+                        container_id=c.container_id,
+                        name=c.name,
+                        image=c.image,
+                        tag=c.tag,
+                        subdomain=c.subdomain,
+                        internal_port=c.internal_port,
+                        external_port=c.external_port,
+                        environment_vars=c.environment_vars,
+                        volumes=c.volumes,
+                        command=c.command,
+                        memory_limit=c.memory_limit,
+                        cpu_limit=c.cpu_limit,
+                        status=c.status,
+                        restart_policy=c.restart_policy,
+                        description=c.description,
+                        labels=c.labels,
+                        created_at=c.created_at,
+                        updated_at=c.updated_at,
+                        started_at=c.started_at,
+                        stopped_at=c.stopped_at,
+                        user_id=c.user_id,
+                    )
+                    for c in containers
+                ]
+            except Exception as e:
+                logger.error(f"Error fetching containers: {e}")
+                return []
     
     @strawberry.field
     async def container(self, id: strawberry.ID) -> Optional[ContainerType]:
         """Get container by ID"""
         try:
-            db = next(get_db())
-            c = db.query(Container).filter(Container.id == int(id)).first()
-            if c:
-                return ContainerType(
-                    id=c.id,
-                    container_id=c.container_id,
-                    name=c.name,
-                    image=c.image,
-                    tag=c.tag,
-                    subdomain=c.subdomain,
-                    internal_port=c.internal_port,
-                    external_port=c.external_port,
-                    environment_vars=c.environment_vars,
-                    volumes=c.volumes,
-                    command=c.command,
-                    memory_limit=c.memory_limit,
-                    cpu_limit=c.cpu_limit,
-                    status=c.status,
-                    restart_policy=c.restart_policy,
-                    description=c.description,
-                    labels=c.labels,
-                    created_at=c.created_at,
-                    updated_at=c.updated_at,
-                    started_at=c.started_at,
-                    stopped_at=c.stopped_at,
-                    user_id=c.user_id,
+            container_id = int(id)
+        except ValueError:
+            return None
+
+        async for session in get_db():
+            try:
+                result = await session.execute(
+                    select(Container).where(Container.id == container_id)
                 )
-        except Exception as e:
-            logger.error(f"Error fetching container {id}: {e}")
-        return None
+                c = result.scalar_one_or_none()
+                if c:
+                    return ContainerType(
+                        id=c.id,
+                        container_id=c.container_id,
+                        name=c.name,
+                        image=c.image,
+                        tag=c.tag,
+                        subdomain=c.subdomain,
+                        internal_port=c.internal_port,
+                        external_port=c.external_port,
+                        environment_vars=c.environment_vars,
+                        volumes=c.volumes,
+                        command=c.command,
+                        memory_limit=c.memory_limit,
+                        cpu_limit=c.cpu_limit,
+                        status=c.status,
+                        restart_policy=c.restart_policy,
+                        description=c.description,
+                        labels=c.labels,
+                        created_at=c.created_at,
+                        updated_at=c.updated_at,
+                        started_at=c.started_at,
+                        stopped_at=c.stopped_at,
+                        user_id=c.user_id,
+                    )
+            except Exception as e:
+                logger.error(f"Error fetching container {id}: {e}")
+            return None
 
     @strawberry.field
     async def container_by_name(self, name: str) -> Optional[ContainerType]:
         """Get container by name"""
-        try:
-            db = next(get_db())
-            c = db.query(Container).filter(Container.name == name).first()
-            if c:
-                return ContainerType(
-                    id=c.id,
-                    container_id=c.container_id,
-                    name=c.name,
-                    image=c.image,
-                    tag=c.tag,
-                    subdomain=c.subdomain,
-                    internal_port=c.internal_port,
-                    external_port=c.external_port,
-                    environment_vars=c.environment_vars,
-                    volumes=c.volumes,
-                    command=c.command,
-                    memory_limit=c.memory_limit,
-                    cpu_limit=c.cpu_limit,
-                    status=c.status,
-                    restart_policy=c.restart_policy,
-                    description=c.description,
-                    labels=c.labels,
-                    created_at=c.created_at,
-                    updated_at=c.updated_at,
-                    started_at=c.started_at,
-                    stopped_at=c.stopped_at,
-                    user_id=c.user_id,
+        async for session in get_db():
+            try:
+                result = await session.execute(
+                    select(Container).where(Container.name == name)
                 )
-        except Exception as e:
-            logger.error(f"Error fetching container by name {name}: {e}")
-        return None
+                c = result.scalar_one_or_none()
+                if c:
+                    return ContainerType(
+                        id=c.id,
+                        container_id=c.container_id,
+                        name=c.name,
+                        image=c.image,
+                        tag=c.tag,
+                        subdomain=c.subdomain,
+                        internal_port=c.internal_port,
+                        external_port=c.external_port,
+                        environment_vars=c.environment_vars,
+                        volumes=c.volumes,
+                        command=c.command,
+                        memory_limit=c.memory_limit,
+                        cpu_limit=c.cpu_limit,
+                        status=c.status,
+                        restart_policy=c.restart_policy,
+                        description=c.description,
+                        labels=c.labels,
+                        created_at=c.created_at,
+                        updated_at=c.updated_at,
+                        started_at=c.started_at,
+                        stopped_at=c.stopped_at,
+                        user_id=c.user_id,
+                    )
+            except Exception as e:
+                logger.error(f"Error fetching container by name {name}: {e}")
+            return None
 
     @strawberry.field
     async def container_stats(self, id: strawberry.ID) -> Optional[ContainerStatsType]:
         """Get container statistics"""
         try:
-            db = next(get_db())
-            c = db.query(Container).filter(Container.id == int(id)).first()
-            if c and c.container_id:
-                stats = await docker_manager.get_container_stats(c.container_id)
-                return ContainerStatsType(
-                    cpu_usage=stats["cpu_usage"],
-                    memory_usage=stats["memory_usage"],
-                    memory_limit=stats["memory_limit"],
-                    network_rx=stats["network_rx"],
-                    network_tx=stats["network_tx"],
+            container_id = int(id)
+        except ValueError:
+            return None
+
+        async for session in get_db():
+            try:
+                result = await session.execute(
+                    select(Container).where(Container.id == container_id)
                 )
-        except Exception as e:
-            logger.error(f"Error fetching container stats {id}: {e}")
-        return None
+                c = result.scalar_one_or_none()
+                if c and c.container_id:
+                    stats = await docker_manager.get_container_stats(c.container_id)
+                    return ContainerStatsType(
+                        cpu_usage=stats["cpu_usage"],
+                        memory_usage=stats["memory_usage"],
+                        memory_limit=stats["memory_limit"],
+                        network_rx=stats["network_rx"],
+                        network_tx=stats["network_tx"],
+                    )
+            except Exception as e:
+                logger.error(f"Error fetching container stats {id}: {e}")
+            return None
 
     @strawberry.field
     async def system_info(self) -> SystemInfoType:
@@ -399,77 +420,78 @@ class Mutation:
     @strawberry.mutation
     async def create_container(self, input: ContainerInput) -> ContainerType:
         """Create a new container"""
-        try:
-            # Create container in Docker
-            docker_result = await docker_manager.create_container(
-                name=input.name,
-                image=input.image,
-                tag=input.tag,
-                subdomain=input.subdomain,
-                internal_port=input.internal_port,
-                external_port=input.external_port,
-                environment=input.environment_vars,
-                volumes=input.volumes,
-                command=input.command,
-                memory_limit=input.memory_limit,
-                cpu_limit=input.cpu_limit,
-                restart_policy=input.restart_policy,
-                labels=input.labels,
-            )
+        async for session in get_db():
+            try:
+                # Create container in Docker
+                docker_result = await docker_manager.create_container(
+                    name=input.name,
+                    image=input.image,
+                    tag=input.tag,
+                    subdomain=input.subdomain,
+                    internal_port=input.internal_port,
+                    external_port=input.external_port,
+                    environment=input.environment_vars,
+                    volumes=input.volumes,
+                    command=input.command,
+                    memory_limit=input.memory_limit,
+                    cpu_limit=input.cpu_limit,
+                    restart_policy=input.restart_policy,
+                    labels=input.labels,
+                )
 
-            # Save to database
-            db = next(get_db())
-            container = Container(
-                container_id=docker_result["id"],
-                name=input.name,
-                image=input.image,
-                tag=input.tag,
-                subdomain=input.subdomain,
-                internal_port=input.internal_port,
-                external_port=input.external_port,
-                environment_vars=input.environment_vars or {},
-                volumes=input.volumes or [],
-                command=input.command,
-                memory_limit=input.memory_limit,
-                cpu_limit=input.cpu_limit,
-                status="created",
-                restart_policy=input.restart_policy,
-                description=input.description,
-                labels=input.labels or {},
-            )
-            db.add(container)
-            db.commit()
-            db.refresh(container)
+                # Save to database
+                container = Container(
+                    container_id=docker_result["id"],
+                    name=input.name,
+                    image=input.image,
+                    tag=input.tag,
+                    subdomain=input.subdomain,
+                    internal_port=input.internal_port,
+                    external_port=input.external_port,
+                    environment_vars=input.environment_vars or {},
+                    volumes=input.volumes or [],
+                    command=input.command,
+                    memory_limit=input.memory_limit,
+                    cpu_limit=input.cpu_limit,
+                    status="created",
+                    restart_policy=input.restart_policy,
+                    description=input.description,
+                    labels=input.labels or {},
+                )
+                session.add(container)
+                await session.commit()
+                await session.refresh(container)
 
-            logger.info(f"Created container: {input.name}")
+                logger.info(f"Created container: {input.name}")
 
-            return ContainerType(
-                id=container.id,
-                container_id=container.container_id,
-                name=container.name,
-                image=container.image,
-                tag=container.tag,
-                subdomain=container.subdomain,
-                internal_port=container.internal_port,
-                external_port=container.external_port,
-                environment_vars=container.environment_vars,
-                volumes=container.volumes,
-                command=container.command,
-                memory_limit=container.memory_limit,
-                cpu_limit=container.cpu_limit,
-                status=container.status,
-                restart_policy=container.restart_policy,
-                description=container.description,
-                labels=container.labels,
-                created_at=container.created_at,
-                updated_at=container.updated_at,
-                started_at=container.started_at,
-                stopped_at=container.stopped_at,
-                user_id=container.user_id,
-            )
-        except Exception as e:
-            logger.error(f"Error creating container: {e}")
-            raise
+                return ContainerType(
+                    id=container.id,
+                    container_id=container.container_id,
+                    name=container.name,
+                    image=container.image,
+                    tag=container.tag,
+                    subdomain=container.subdomain,
+                    internal_port=container.internal_port,
+                    external_port=container.external_port,
+                    environment_vars=container.environment_vars,
+                    volumes=container.volumes,
+                    command=container.command,
+                    memory_limit=container.memory_limit,
+                    cpu_limit=container.cpu_limit,
+                    status=container.status,
+                    restart_policy=container.restart_policy,
+                    description=container.description,
+                    labels=container.labels,
+                    created_at=container.created_at,
+                    updated_at=container.updated_at,
+                    started_at=container.started_at,
+                    stopped_at=container.stopped_at,
+                    user_id=container.user_id,
+                )
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error creating container: {e}")
+                raise
     
     @strawberry.mutation
     async def update_container(self, id: strawberry.ID, input: UpdateContainerInput) -> ContainerType:
