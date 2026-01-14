@@ -1,0 +1,24 @@
+# Requirements for ASU1-Loom Presentation Diagram Generation
+# Install with: pip install -r requirements.txt
+
+# ============================================================================
+# OPTION 1: Simple Diagrams (RECOMMENDED - No extra tools needed!)
+# ============================================================================
+# Only needs Pillow - no Graphviz installation required
+pillow>=10.0.0
+
+# Use: python generate_diagrams_simple.py
+
+
+# ============================================================================
+# OPTION 2: Advanced Diagrams (Optional - requires Graphviz)
+# ============================================================================
+# Uncomment below if you want more complex diagrams
+# graphviz>=0.20.1
+
+# Note: Also requires Graphviz system package:
+# - Windows: Download from https://graphviz.org/download/
+# - Mac: brew install graphviz
+# - Linux: sudo apt-get install graphviz
+
+# Use: python generate_diagrams.py
