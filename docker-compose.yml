@@ -53,11 +53,11 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`) && (PathPrefix(`/api`) || Path(`/health`) || Path(`/info`) || Path(`/graphql`) || Path(`/docs`))"
+      # Backend gets higher priority for API routes
+      - "traefik.http.routers.backend.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/graphql`) || PathPrefix(`/health`) || PathPrefix(`/info`) || PathPrefix(`/docs`))"
       - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.routers.backend.priority=10"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
-      - "traefik.http.middlewares.backend-strip-prefix.stripprefix.prefixes=/api"
-      - "traefik.http.routers.backend.middlewares=backend-strip-prefix"
 
   # Frontend (WASM) - Served via nginx
   frontend:
@@ -74,9 +74,13 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
+      # Frontend gets priority and handles all non-API routes
       - "traefik.http.routers.frontend.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`)"
       - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.priority=1"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      # Ensure proper Content-Type headers are preserved
+      - "traefik.http.middlewares.frontend-headers.headers.customresponseheaders.Content-Type=text/html; charset=utf-8"
 
 networks:
   loom_network:
