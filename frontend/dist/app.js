@@ -1,6 +1,8 @@
 // ASU1-Loom Frontend Application
 
-const API_ENDPOINT = 'http://localhost:8000/graphql';
+// Use relative URL so it works from any domain (localhost or pandaserver.ddns.net)
+// Traefik will route /graphql to the backend
+const API_ENDPOINT = '/graphql';
 
 // State management
 let containers = [];
