@@ -1185,6 +1185,113 @@ function setupModalFormInteractions() {
             });
         }
     });
+    
+    // Initialize WASM validator
+    if (window.initValidator) {
+        window.initValidator().then(() => {
+            console.log('✅ WASM validator initialized for form');
+        }).catch(err => {
+            console.warn('⚠️ WASM validator failed to initialize, using JavaScript fallback');
+        });
+    }
+    
+    // Real-time validation for container name
+    const nameInput = document.getElementById('template-name');
+    if (nameInput) {
+        let validationTimeout;
+        nameInput.addEventListener('input', async (e) => {
+            clearTimeout(validationTimeout);
+            
+            // Show loading indicator
+            showValidationStatus(nameInput, 'validating', '🔄 Checking...');
+            
+            validationTimeout = setTimeout(async () => {
+                if (window.validateContainerName) {
+                    const result = await window.validateContainerName(e.target.value);
+                    
+                    if (result.valid) {
+                        showValidationStatus(nameInput, 'valid', '✓ Valid name');
+                    } else {
+                        showValidationStatus(nameInput, 'invalid', result.error);
+                    }
+                }
+            }, 500); // Debounce 500ms
+        });
+    }
+    
+    // Real-time validation for subdomain
+    const subdomainInput = document.getElementById('template-subdomain');
+    if (subdomainInput) {
+        let validationTimeout;
+        subdomainInput.addEventListener('input', async (e) => {
+            clearTimeout(validationTimeout);
+            
+            showValidationStatus(subdomainInput, 'validating', '🔄 Checking...');
+            
+            validationTimeout = setTimeout(async () => {
+                if (window.validateSubdomain) {
+                    const result = await window.validateSubdomain(e.target.value);
+                    
+                    if (result.valid) {
+                        showValidationStatus(subdomainInput, 'valid', '✓ Valid subdomain');
+                    } else {
+                        showValidationStatus(subdomainInput, 'invalid', result.error);
+                    }
+                }
+            }, 500);
+        });
+    }
+    
+    // Real-time validation for port
+    const portInput = document.getElementById('template-port');
+    if (portInput) {
+        portInput.addEventListener('input', async (e) => {
+            if (window.validatePort) {
+                const result = await window.validatePort(e.target.value);
+                
+                if (result.valid) {
+                    if (result.warning) {
+                        showValidationStatus(portInput, 'warning', '⚠️ ' + result.warning);
+                    } else {
+                        showValidationStatus(portInput, 'valid', '✓ Valid port');
+                    }
+                } else {
+                    showValidationStatus(portInput, 'invalid', result.error);
+                }
+            }
+        });
+    }
+}
+
+// Helper function to show validation status
+function showValidationStatus(input, status, message) {
+    // Remove existing validation message
+    const existingMsg = input.parentElement.querySelector('.validation-message');
+    if (existingMsg) {
+        existingMsg.remove();
+    }
+    
+    // Remove existing status classes
+    input.classList.remove('input-valid', 'input-invalid', 'input-validating', 'input-warning');
+    
+    // Add new status
+    if (status === 'valid') {
+        input.classList.add('input-valid');
+    } else if (status === 'invalid') {
+        input.classList.add('input-invalid');
+    } else if (status === 'validating') {
+        input.classList.add('input-validating');
+    } else if (status === 'warning') {
+        input.classList.add('input-warning');
+    }
+    
+    // Add validation message
+    if (message) {
+        const msgEl = document.createElement('div');
+        msgEl.className = `validation-message validation-${status}`;
+        msgEl.textContent = message;
+        input.parentElement.appendChild(msgEl);
+    }
 }
 
 // Back to modal template selection

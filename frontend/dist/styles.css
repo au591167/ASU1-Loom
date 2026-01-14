@@ -1048,3 +1048,137 @@ input[type="range"]::-moz-range-thumb:hover {
         padding: 1.5rem;
     }
 }
+
+/* ============================================================================
+   WASM VALIDATION STYLES
+   ============================================================================ */
+
+/* Validation States */
+.input-valid {
+    border-color: var(--success-color) !important;
+    background-color: #f0fdf4;
+}
+
+.input-invalid {
+    border-color: var(--danger-color) !important;
+    background-color: #fef2f2;
+}
+
+.input-validating {
+    border-color: var(--primary-color) !important;
+    background-color: #eff6ff;
+}
+
+.input-warning {
+    border-color: var(--warning-color) !important;
+    background-color: #fffbeb;
+}
+
+/* Validation Messages */
+.validation-message {
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.validation-valid {
+    color: #065f46;
+    background-color: #d1fae5;
+    border: 1px solid #6ee7b7;
+}
+
+.validation-invalid {
+    color: #991b1b;
+    background-color: #fee2e2;
+    border: 1px solid #fca5a5;
+}
+
+.validation-validating {
+    color: #1e40af;
+    background-color: #dbeafe;
+    border: 1px solid #93c5fd;
+}
+
+.validation-warning {
+    color: #92400e;
+    background-color: #fef3c7;
+    border: 1px solid #fcd34d;
+}
+
+/* Input focus states with validation */
+.input-valid:focus {
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
+}
+
+.input-invalid:focus {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+}
+
+.input-validating:focus {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+}
+
+.input-warning:focus {
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1) !important;
+}
+
+/* Loading spinner for validation */
+.input-validating::after {
+    content: '';
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid var(--primary-color);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: translateY(-50%) rotate(360deg);
+    }
+}
+
+/* Form group with validation */
+.form-group {
+    position: relative;
+}
+
+/* Validation icons */
+.validation-valid::before {
+    content: '✓';
+    font-weight: bold;
+}
+
+.validation-invalid::before {
+    content: '✕';
+    font-weight: bold;
+}
+
+.validation-validating::before {
+    content: '🔄';
+}
+
+.validation-warning::before {
+    content: '⚠️';
+}
