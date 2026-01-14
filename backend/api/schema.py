@@ -1,6 +1,11 @@
 """
 GraphQL Schema for ASU1-Loom API
-Defines queries and mutations for container management
+
+Defines the GraphQL API using Strawberry.
+This is the interface between the frontend and backend, providing:
+- Queries: Read operations (get containers, stats, system info)
+- Mutations: Write operations (create, start, stop, delete containers)
+- Types: Data structures returned to the frontend
 """
 
 import strawberry
@@ -13,40 +18,51 @@ from services.docker_manager import docker_manager
 from services.modpack_service import get_modpack_manager
 from loguru import logger
 
-# Import JSON type for Strawberry
+# JSON scalar type for flexible data structures (environment vars, labels, etc.)
 JSON = strawberry.scalars.JSON
 
 
-# GraphQL Types
+# ============================================================================
+# GraphQL Types - Define the shape of data returned to frontend
+# ============================================================================
+
 @strawberry.type
 class ContainerType:
-    """GraphQL type for Container"""
-    id: strawberry.ID
-    container_id: Optional[str]
-    name: str
-    image: str
-    tag: str
-    subdomain: str
-    internal_port: int
-    external_port: Optional[int]
-    environment_vars: JSON
-    volumes: JSON
-    command: Optional[str]
-    memory_limit: Optional[str]
-    cpu_limit: Optional[str]
-    status: str
-    restart_policy: str
-    description: Optional[str]
-    labels: JSON
-    created_at: datetime
-    updated_at: datetime
-    started_at: Optional[datetime]
-    stopped_at: Optional[datetime]
-    user_id: Optional[int]
+    """
+    Container data structure returned to frontend.
+    
+    Maps database Container model to GraphQL type.
+    Includes all container configuration and status information.
+    """
+    id: strawberry.ID  # Database ID
+    container_id: Optional[str]  # Docker container ID (12-char hash)
+    name: str  # Unique container name
+    image: str  # Docker image (e.g., "nginx", "minecraft-server")
+    tag: str  # Image version tag
+    subdomain: str  # Subdomain for Traefik routing
+    internal_port: int  # Port app listens on inside container
+    external_port: Optional[int]  # Optional direct port mapping
+    environment_vars: JSON  # Environment variables as JSON
+    volumes: JSON  # Volume mounts as JSON
+    command: Optional[str]  # Custom command override
+    memory_limit: Optional[str]  # RAM limit (e.g., "512m")
+    cpu_limit: Optional[str]  # CPU limit (e.g., "0.5")
+    status: str  # Container status (created, running, stopped)
+    restart_policy: str  # Restart policy (unless-stopped, always, no)
+    description: Optional[str]  # User description
+    labels: JSON  # Docker labels as JSON
+    created_at: datetime  # When container was created
+    updated_at: datetime  # Last update time
+    started_at: Optional[datetime]  # When last started
+    stopped_at: Optional[datetime]  # When last stopped
+    user_id: Optional[int]  # Owner user ID (for multi-user support)
     
     @strawberry.field
     def port(self) -> int:
-        """Alias for internal_port for frontend compatibility"""
+        """
+        Alias for internal_port for frontend compatibility.
+        Some frontend code uses 'port' instead of 'internal_port'.
+        """
         return self.internal_port
 
 
@@ -419,10 +435,22 @@ class Mutation:
 
     @strawberry.mutation
     async def create_container(self, input: ContainerInput) -> ContainerType:
-        """Create a new container"""
+        """
+        Create a new container - the main mutation called from frontend.
+        
+        This is a two-step process:
+        1. Create container in Docker (via docker_manager)
+        2. Save metadata to PostgreSQL database
+        
+        This ensures we have both the running container and persistent metadata.
+        """
         async for session in get_db():
             try:
-                # Create container in Docker
+                # Step 1: Create container in Docker
+                # This calls docker_manager.create_container() which:
+                # - Pulls the image if needed
+                # - Generates Traefik labels for routing
+                # - Creates the container (but doesn't start it)
                 docker_result = await docker_manager.create_container(
                     name=input.name,
                     image=input.image,
@@ -439,9 +467,11 @@ class Mutation:
                     labels=input.labels,
                 )
 
-                # Save to database
+                # Step 2: Save container metadata to database
+                # This allows us to track containers even if Docker restarts
+                # and provides additional metadata not stored in Docker
                 container = Container(
-                    container_id=docker_result["id"],
+                    container_id=docker_result["id"],  # Docker's container ID
                     name=input.name,
                     image=input.image,
                     tag=input.tag,
@@ -453,17 +483,18 @@ class Mutation:
                     command=input.command,
                     memory_limit=input.memory_limit,
                     cpu_limit=input.cpu_limit,
-                    status="created",
+                    status="created",  # Initial status
                     restart_policy=input.restart_policy,
                     description=input.description,
                     labels=input.labels or {},
                 )
                 session.add(container)
-                await session.commit()
-                await session.refresh(container)
+                await session.commit()  # Persist to database
+                await session.refresh(container)  # Get auto-generated fields (id, timestamps)
 
                 logger.info(f"Created container: {input.name}")
 
+                # Return ContainerType to frontend
                 return ContainerType(
                     id=container.id,
                     container_id=container.container_id,
@@ -489,9 +520,10 @@ class Mutation:
                     user_id=container.user_id,
                 )
             except Exception as e:
+                # Rollback database changes if anything fails
                 await session.rollback()
                 logger.error(f"Error creating container: {e}")
-                raise
+                raise  # Re-raise to return error to frontend
     
     @strawberry.mutation
     async def update_container(self, id: strawberry.ID, input: UpdateContainerInput) -> ContainerType:
