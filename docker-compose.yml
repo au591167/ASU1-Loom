@@ -53,7 +53,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`) && (PathPrefix(`/api`) || Path(`/health`) || Path(`/info`) || Path(`/graphql`) || Path(`/docs`))"
       - "traefik.http.routers.backend.entrypoints=web"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.backend-strip-prefix.stripprefix.prefixes=/api"
