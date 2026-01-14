@@ -55,7 +55,7 @@ services:
     labels:
       - "traefik.enable=true"
       # Backend gets higher priority for API routes
-      - "traefik.http.routers.backend.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/graphql`) || PathPrefix(`/health`) || PathPrefix(`/info`) || PathPrefix(`/docs`))"
+      - "traefik.http.routers.backend.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`) && (PathPrefix(`/api`) || PathPrefix(`/graphql`) || Path(`/health`) || Path(`/info`) || PathPrefix(`/docs`))"
       - "traefik.http.routers.backend.entrypoints=web"
       - "traefik.http.routers.backend.priority=10"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
