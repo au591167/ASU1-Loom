@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # Traefik Reverse Proxy
   traefik:
-    image: traefik:v3.1
+    image: traefik:v2.11
     container_name: loom_traefik
     command:
       - "--api.insecure=true"
@@ -14,8 +14,6 @@ services:
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--log.level=INFO"
-    environment:
-      - DOCKER_API_VERSION=1.52
     ports:
       - "80:80"
       - "443:443"
