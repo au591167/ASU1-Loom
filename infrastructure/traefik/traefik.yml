@@ -26,17 +26,6 @@ providers:
 # Logging
 log:
   level: INFO
-  format: common
 
 # Access Logs
-accessLog:
-  format: common
-
-# Let's Encrypt (optional - for production)
-# certificatesResolvers:
-#   letsencrypt:
-#     acme:
-#       email: admin@pandaserver.ddns.net
-#       storage: /letsencrypt/acme.json
-#       httpChallenge:
-#         entryPoint: web
+accessLog: {}
