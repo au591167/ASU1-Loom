@@ -53,9 +53,11 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`api.${TRAEFIK_DOMAIN:-localhost}`)"
+      - "traefik.http.routers.backend.rule=Host(`${TRAEFIK_DOMAIN:-localhost}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.backend.entrypoints=web"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.backend-strip-prefix.stripprefix.prefixes=/api"
+      - "traefik.http.routers.backend.middlewares=backend-strip-prefix"
 
   # Frontend (WASM) - Served via nginx
   frontend:
