@@ -56,7 +56,7 @@ htmlcov/
 .tox/
 
 # Frontend build
-frontend/dist/
+# frontend/dist/  # Temporarily commented out for deployment
 frontend/build/
 frontend/node_modules/
 *.wasm.map

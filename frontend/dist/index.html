@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASU1-Loom - Container Orchestration</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://kit.fontawesome.com/3e139939e3.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <script src="templates.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>ASU1-Loom</h1>
+                <p class="subtitle">Hybrid Container Orchestration Platform</p>
+            </div>
+            <nav>
+                <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+                <button class="nav-btn" data-view="containers">Containers</button>
+                <button class="nav-btn" data-view="settings">Settings</button>
+                <div class="split-button-container">
+                    <button type="button" class="btn btn-primary split-button-main" id="create-main-btn">
+                        New Container
+                    </button>
+                    <button type="button" class="btn btn-primary split-button-dropdown" id="create-dropdown-btn">
+                        ▼
+                    </button>
+                    <div class="dropdown-menu" id="create-dropdown-menu">
+                        <div class="dropdown-item" data-category="development">
+                            <span class="dropdown-icon"><i class="fas fa-code"></i></span>
+                            <div class="dropdown-text">
+                                <strong>Development Container</strong>
+                                <small>Node.js, Python, PHP, etc.</small>
+                            </div>
+                        </div>
+                        <div class="dropdown-item" data-category="minecraft">
+                            <span class="dropdown-icon"><i class="fas fa-cube"></i></span>
+                            <div class="dropdown-text">
+                                <strong>Minecraft Server</strong>
+                                <small>Vanilla, Paper, Spigot</small>
+                            </div>
+                        </div>
+                        <div class="dropdown-item" data-category="gameserver">
+                            <span class="dropdown-icon"><i class="fas fa-gamepad"></i></span>
+                            <div class="dropdown-text">
+                                <strong>Game Server</strong>
+                                <small>Valheim, Terraria, etc.</small>
+                            </div>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item" data-category="custom">
+                            <span class="dropdown-icon"><i class="fas fa-box"></i></span>
+                            <div class="dropdown-text">
+                                <strong>Custom Container</strong>
+                                <small>Advanced configuration</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </header>
+
+        <main id="main-content">
+            <!-- Dashboard View -->
+            <div id="dashboard-view" class="view active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Total Containers</h3>
+                        <p class="stat-value" id="total-containers">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Running</h3>
+                        <p class="stat-value running" id="running-containers">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Stopped</h3>
+                        <p class="stat-value stopped" id="stopped-containers">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>CPU Usage</h3>
+                        <p class="stat-value" id="cpu-usage">0%</p>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Recent Containers</h2>
+                    <div id="recent-containers" class="container-list">
+                        <p class="loading">Loading containers...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create Container View -->
+            <div id="create-view" class="view">
+
+                <!-- Template Selection -->
+                <div id="template-selection" class="template-selection" style="display: none;">
+                    <h3 id="template-category-title"></h3>
+                    <div id="template-types" class="template-types"></div>
+                </div>
+
+                <!-- Container Form -->
+                <form id="create-container-form" class="form" style="display: none;">
+                    <input type="hidden" id="selected-category" name="category">
+                    <input type="hidden" id="selected-type" name="type">
+                    
+                    <h3 id="form-title">Container Configuration</h3>
+                    
+                    <!-- Dynamic form fields will be inserted here -->
+                    <div id="dynamic-form-fields"></div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="back-to-selection">← Back to Selection</button>
+                        <button type="submit" class="btn btn-primary">Create Container</button>
+                        <button type="reset" class="btn btn-secondary">Reset Form</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Containers List View -->
+            <div id="containers-view" class="view">
+                <div class="section-header">
+                    <h2>All Containers</h2>
+                    <button class="btn btn-primary" onclick="refreshContainers()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div id="all-containers" class="container-list">
+                    <p class="loading">Loading containers...</p>
+                </div>
+            </div>
+
+            <!-- Settings View -->
+            <div id="settings-view" class="view">
+                <h2>Settings</h2>
+                <div class="settings-section">
+                    <h3>API Configuration</h3>
+                    <div class="form-group">
+                        <label>API Endpoint</label>
+                        <input type="text" id="api-endpoint" value="http://localhost:8000/graphql" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Connection Status</label>
+                        <p id="connection-status" class="status">Checking...</p>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>About</h3>
+                    <p><strong>Version:</strong> 1.0.0</p>
+                    <p><strong>Author:</strong> Erik Kjær Klint</p>
+                    <p><strong>Course:</strong> EH5ASU1 - Avanceret Softwareudvikling 1</p>
+                    <p><strong>License:</strong> MIT</p>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 ASU1-Loom | Aarhus University | EH5ASU1</p>
+        </footer>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <!-- Modal for Container Creation -->
+    <div id="container-modal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Create Container</h2>
+                <button class="modal-close" id="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Template Selection -->
+                <div id="modal-template-selection" class="modal-template-selection" style="display: none;">
+                    <h3 id="modal-template-category-title"></h3>
+                    <div id="modal-template-types" class="template-types"></div>
+                </div>
+
+                <!-- Container Form -->
+                <form id="modal-container-form" class="form" style="display: none;">
+                    <input type="hidden" id="modal-selected-category" name="category">
+                    <input type="hidden" id="modal-selected-type" name="type">
+                    
+                    <h3 id="modal-form-title">Container Configuration</h3>
+                    
+                    <!-- Dynamic form fields will be inserted here -->
+                    <div id="modal-dynamic-form-fields"></div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="modal-back-btn">← Back</button>
+                        <button type="submit" class="btn btn-primary">Create Container</button>
+                        <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
