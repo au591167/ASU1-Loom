@@ -32,7 +32,6 @@ sudo ufw --force enable
 ### Step 1.3: Create Application User
 ```bash
 sudo useradd -m -s /bin/bash loom
-sudo usermod -aG docker loom
 sudo mkdir -p /opt/loom
 sudo chown loom:loom /opt/loom
 ```
@@ -55,6 +54,9 @@ sudo systemctl start docker
 # Install Docker Compose
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
+
+# Add loom user to docker group (now that Docker is installed)
+sudo usermod -aG docker loom
 ```
 
 ### Step 2.2: Install Traefik
