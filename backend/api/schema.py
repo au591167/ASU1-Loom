@@ -496,230 +496,250 @@ class Mutation:
     @strawberry.mutation
     async def update_container(self, id: strawberry.ID, input: UpdateContainerInput) -> ContainerType:
         """Update an existing container"""
-        try:
-            db = next(get_db())
-            container = db.query(Container).filter(Container.id == int(id)).first()
-            if not container:
-                raise ValueError(f"Container {id} not found")
+        async for session in get_db():
+            try:
+                result = await session.execute(
+                    select(Container).where(Container.id == int(id))
+                )
+                container = result.scalar_one_or_none()
+                if not container:
+                    raise ValueError(f"Container {id} not found")
 
-            # Update fields
-            if input.name is not None:
-                container.name = input.name
-            if input.environment_vars is not None:
-                container.environment_vars = input.environment_vars
-            if input.memory_limit is not None:
-                container.memory_limit = input.memory_limit
-            if input.cpu_limit is not None:
-                container.cpu_limit = input.cpu_limit
-            if input.description is not None:
-                container.description = input.description
-            if input.labels is not None:
-                container.labels = input.labels
+                # Update fields
+                if input.name is not None:
+                    container.name = input.name
+                if input.environment_vars is not None:
+                    container.environment_vars = input.environment_vars
+                if input.memory_limit is not None:
+                    container.memory_limit = input.memory_limit
+                if input.cpu_limit is not None:
+                    container.cpu_limit = input.cpu_limit
+                if input.description is not None:
+                    container.description = input.description
+                if input.labels is not None:
+                    container.labels = input.labels
 
-            db.commit()
-            db.refresh(container)
+                await session.commit()
+                await session.refresh(container)
 
-            logger.info(f"Updated container: {container.name}")
+                logger.info(f"Updated container: {container.name}")
 
-            return ContainerType(
-                id=container.id,
-                container_id=container.container_id,
-                name=container.name,
-                image=container.image,
-                tag=container.tag,
-                subdomain=container.subdomain,
-                internal_port=container.internal_port,
-                external_port=container.external_port,
-                environment_vars=container.environment_vars,
-                volumes=container.volumes,
-                command=container.command,
-                memory_limit=container.memory_limit,
-                cpu_limit=container.cpu_limit,
-                status=container.status,
-                restart_policy=container.restart_policy,
-                description=container.description,
-                labels=container.labels,
-                created_at=container.created_at,
-                updated_at=container.updated_at,
-                started_at=container.started_at,
-                stopped_at=container.stopped_at,
-                user_id=container.user_id,
-            )
-        except Exception as e:
-            logger.error(f"Error updating container {id}: {e}")
-            raise
+                return ContainerType(
+                    id=container.id,
+                    container_id=container.container_id,
+                    name=container.name,
+                    image=container.image,
+                    tag=container.tag,
+                    subdomain=container.subdomain,
+                    internal_port=container.internal_port,
+                    external_port=container.external_port,
+                    environment_vars=container.environment_vars,
+                    volumes=container.volumes,
+                    command=container.command,
+                    memory_limit=container.memory_limit,
+                    cpu_limit=container.cpu_limit,
+                    status=container.status,
+                    restart_policy=container.restart_policy,
+                    description=container.description,
+                    labels=container.labels,
+                    created_at=container.created_at,
+                    updated_at=container.updated_at,
+                    started_at=container.started_at,
+                    stopped_at=container.stopped_at,
+                    user_id=container.user_id,
+                )
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error updating container {id}: {e}")
+                raise
 
     @strawberry.mutation
     async def delete_container(self, id: strawberry.ID) -> bool:
         """Delete a container"""
-        try:
-            db = next(get_db())
-            container = db.query(Container).filter(Container.id == int(id)).first()
-            if not container:
+        async for session in get_db():
+            try:
+                result = await session.execute(
+                    select(Container).where(Container.id == int(id))
+                )
+                container = result.scalar_one_or_none()
+                if not container:
+                    return False
+
+                # Delete from Docker if it exists
+                if container.container_id:
+                    try:
+                        await docker_manager.delete_container(container.container_id, force=True)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete container from Docker: {e}")
+
+                # Delete from database
+                await session.delete(container)
+                await session.commit()
+
+                logger.info(f"Deleted container: {container.name}")
+                return True
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error deleting container {id}: {e}")
                 return False
-
-            # Delete from Docker if it exists
-            if container.container_id:
-                try:
-                    await docker_manager.delete_container(container.container_id, force=True)
-                except Exception as e:
-                    logger.warning(f"Failed to delete container from Docker: {e}")
-
-            # Delete from database
-            db.delete(container)
-            db.commit()
-
-            logger.info(f"Deleted container: {container.name}")
-            return True
-        except Exception as e:
-            logger.error(f"Error deleting container {id}: {e}")
-            return False
 
     @strawberry.mutation
     async def start_container(self, id: strawberry.ID) -> ContainerType:
         """Start a container"""
-        try:
-            db = next(get_db())
-            container = db.query(Container).filter(Container.id == int(id)).first()
-            if not container or not container.container_id:
-                raise ValueError(f"Container {id} not found or has no container_id")
+        async for session in get_db():
+            try:
+                result = await session.execute(
+                    select(Container).where(Container.id == int(id))
+                )
+                container = result.scalar_one_or_none()
+                if not container or not container.container_id:
+                    raise ValueError(f"Container {id} not found or has no container_id")
 
-            # Start in Docker
-            await docker_manager.start_container(container.container_id)
+                # Start in Docker
+                await docker_manager.start_container(container.container_id)
 
-            # Update database
-            container.status = "running"
-            container.started_at = datetime.utcnow()
-            container.stopped_at = None
-            db.commit()
-            db.refresh(container)
+                # Update database
+                container.status = "running"
+                container.started_at = datetime.utcnow()
+                container.stopped_at = None
+                await session.commit()
+                await session.refresh(container)
 
-            logger.info(f"Started container: {container.name}")
+                logger.info(f"Started container: {container.name}")
 
-            return ContainerType(
-                id=container.id,
-                container_id=container.container_id,
-                name=container.name,
-                image=container.image,
-                tag=container.tag,
-                subdomain=container.subdomain,
-                internal_port=container.internal_port,
-                external_port=container.external_port,
-                environment_vars=container.environment_vars,
-                volumes=container.volumes,
-                command=container.command,
-                memory_limit=container.memory_limit,
-                cpu_limit=container.cpu_limit,
-                status=container.status,
-                restart_policy=container.restart_policy,
-                description=container.description,
-                labels=container.labels,
-                created_at=container.created_at,
-                updated_at=container.updated_at,
-                started_at=container.started_at,
-                stopped_at=container.stopped_at,
-                user_id=container.user_id,
-            )
-        except Exception as e:
-            logger.error(f"Error starting container {id}: {e}")
-            raise
+                return ContainerType(
+                    id=container.id,
+                    container_id=container.container_id,
+                    name=container.name,
+                    image=container.image,
+                    tag=container.tag,
+                    subdomain=container.subdomain,
+                    internal_port=container.internal_port,
+                    external_port=container.external_port,
+                    environment_vars=container.environment_vars,
+                    volumes=container.volumes,
+                    command=container.command,
+                    memory_limit=container.memory_limit,
+                    cpu_limit=container.cpu_limit,
+                    status=container.status,
+                    restart_policy=container.restart_policy,
+                    description=container.description,
+                    labels=container.labels,
+                    created_at=container.created_at,
+                    updated_at=container.updated_at,
+                    started_at=container.started_at,
+                    stopped_at=container.stopped_at,
+                    user_id=container.user_id,
+                )
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error starting container {id}: {e}")
+                raise
 
     @strawberry.mutation
     async def stop_container(self, id: strawberry.ID) -> ContainerType:
         """Stop a container"""
-        try:
-            db = next(get_db())
-            container = db.query(Container).filter(Container.id == int(id)).first()
-            if not container or not container.container_id:
-                raise ValueError(f"Container {id} not found or has no container_id")
+        async for session in get_db():
+            try:
+                result = await session.execute(
+                    select(Container).where(Container.id == int(id))
+                )
+                container = result.scalar_one_or_none()
+                if not container or not container.container_id:
+                    raise ValueError(f"Container {id} not found or has no container_id")
 
-            # Stop in Docker
-            await docker_manager.stop_container(container.container_id)
+                # Stop in Docker
+                await docker_manager.stop_container(container.container_id)
 
-            # Update database
-            container.status = "stopped"
-            container.stopped_at = datetime.utcnow()
-            db.commit()
-            db.refresh(container)
+                # Update database
+                container.status = "stopped"
+                container.stopped_at = datetime.utcnow()
+                await session.commit()
+                await session.refresh(container)
 
-            logger.info(f"Stopped container: {container.name}")
+                logger.info(f"Stopped container: {container.name}")
 
-            return ContainerType(
-                id=container.id,
-                container_id=container.container_id,
-                name=container.name,
-                image=container.image,
-                tag=container.tag,
-                subdomain=container.subdomain,
-                internal_port=container.internal_port,
-                external_port=container.external_port,
-                environment_vars=container.environment_vars,
-                volumes=container.volumes,
-                command=container.command,
-                memory_limit=container.memory_limit,
-                cpu_limit=container.cpu_limit,
-                status=container.status,
-                restart_policy=container.restart_policy,
-                description=container.description,
-                labels=container.labels,
-                created_at=container.created_at,
-                updated_at=container.updated_at,
-                started_at=container.started_at,
-                stopped_at=container.stopped_at,
-                user_id=container.user_id,
-            )
-        except Exception as e:
-            logger.error(f"Error stopping container {id}: {e}")
-            raise
+                return ContainerType(
+                    id=container.id,
+                    container_id=container.container_id,
+                    name=container.name,
+                    image=container.image,
+                    tag=container.tag,
+                    subdomain=container.subdomain,
+                    internal_port=container.internal_port,
+                    external_port=container.external_port,
+                    environment_vars=container.environment_vars,
+                    volumes=container.volumes,
+                    command=container.command,
+                    memory_limit=container.memory_limit,
+                    cpu_limit=container.cpu_limit,
+                    status=container.status,
+                    restart_policy=container.restart_policy,
+                    description=container.description,
+                    labels=container.labels,
+                    created_at=container.created_at,
+                    updated_at=container.updated_at,
+                    started_at=container.started_at,
+                    stopped_at=container.stopped_at,
+                    user_id=container.user_id,
+                )
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error stopping container {id}: {e}")
+                raise
 
     @strawberry.mutation
     async def restart_container(self, id: strawberry.ID) -> ContainerType:
         """Restart a container"""
-        try:
-            db = next(get_db())
-            container = db.query(Container).filter(Container.id == int(id)).first()
-            if not container or not container.container_id:
-                raise ValueError(f"Container {id} not found or has no container_id")
+        async for session in get_db():
+            try:
+                result = await session.execute(
+                    select(Container).where(Container.id == int(id))
+                )
+                container = result.scalar_one_or_none()
+                if not container or not container.container_id:
+                    raise ValueError(f"Container {id} not found or has no container_id")
 
-            # Restart in Docker
-            await docker_manager.restart_container(container.container_id)
+                # Restart in Docker
+                await docker_manager.restart_container(container.container_id)
 
-            # Update database
-            container.status = "running"
-            container.started_at = datetime.utcnow()
-            container.stopped_at = None
-            db.commit()
-            db.refresh(container)
+                # Update database
+                container.status = "running"
+                container.started_at = datetime.utcnow()
+                container.stopped_at = None
+                await session.commit()
+                await session.refresh(container)
 
-            logger.info(f"Restarted container: {container.name}")
+                logger.info(f"Restarted container: {container.name}")
 
-            return ContainerType(
-                id=container.id,
-                container_id=container.container_id,
-                name=container.name,
-                image=container.image,
-                tag=container.tag,
-                subdomain=container.subdomain,
-                internal_port=container.internal_port,
-                external_port=container.external_port,
-                environment_vars=container.environment_vars,
-                volumes=container.volumes,
-                command=container.command,
-                memory_limit=container.memory_limit,
-                cpu_limit=container.cpu_limit,
-                status=container.status,
-                restart_policy=container.restart_policy,
-                description=container.description,
-                labels=container.labels,
-                created_at=container.created_at,
-                updated_at=container.updated_at,
-                started_at=container.started_at,
-                stopped_at=container.stopped_at,
-                user_id=container.user_id,
-            )
-        except Exception as e:
-            logger.error(f"Error restarting container {id}: {e}")
-            raise
+                return ContainerType(
+                    id=container.id,
+                    container_id=container.container_id,
+                    name=container.name,
+                    image=container.image,
+                    tag=container.tag,
+                    subdomain=container.subdomain,
+                    internal_port=container.internal_port,
+                    external_port=container.external_port,
+                    environment_vars=container.environment_vars,
+                    volumes=container.volumes,
+                    command=container.command,
+                    memory_limit=container.memory_limit,
+                    cpu_limit=container.cpu_limit,
+                    status=container.status,
+                    restart_policy=container.restart_policy,
+                    description=container.description,
+                    labels=container.labels,
+                    created_at=container.created_at,
+                    updated_at=container.updated_at,
+                    started_at=container.started_at,
+                    stopped_at=container.stopped_at,
+                    user_id=container.user_id,
+                )
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error restarting container {id}: {e}")
+                raise
     
     @strawberry.mutation
     async def create_container_with_modpack(
