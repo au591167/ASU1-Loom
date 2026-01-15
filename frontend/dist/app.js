@@ -1,8 +1,10 @@
 // ASU1-Loom Frontend Application
 
-// Use relative URL so it works from any domain (localhost or pandaserver.ddns.net)
-// Traefik will route /graphql to the backend
-const API_ENDPOINT = '/graphql';
+// Get API endpoint from settings input
+function getApiEndpoint() {
+    const input = document.getElementById('api-endpoint');
+    return input ? input.value : '/graphql';
+}
 
 // State management
 let containers = [];
@@ -11,31 +13,31 @@ let pyodide = null;
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🧵 ASU1-Loom initializing...');
-    
+
     // Setup navigation
     setupNavigation();
-    
+
     // Setup form handlers
     setupFormHandlers();
-    
+
     // Load initial data
     await loadDashboard();
-    
+
     // Check API connection
     checkConnection();
-    
+
     console.log('✅ ASU1-Loom initialized');
 });
 
 // Navigation
 function setupNavigation() {
     const navButtons = document.querySelectorAll('.nav-btn');
-    
+
     navButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const view = btn.dataset.view;
             switchView(view);
-            
+
             // Update active state
             navButtons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
@@ -46,11 +48,11 @@ function setupNavigation() {
 function switchView(viewName) {
     const views = document.querySelectorAll('.view');
     views.forEach(view => view.classList.remove('active'));
-    
+
     const targetView = document.getElementById(`${viewName}-view`);
     if (targetView) {
         targetView.classList.add('active');
-        
+
         // Load data for specific views
         if (viewName === 'dashboard') {
             loadDashboard();
@@ -63,7 +65,7 @@ function switchView(viewName) {
 // Form handlers
 function setupFormHandlers() {
     const createForm = document.getElementById('create-container-form');
-    
+
     if (createForm) {
         createForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -75,7 +77,7 @@ function setupFormHandlers() {
 // GraphQL API calls
 async function graphqlRequest(query, variables = {}) {
     try {
-        const response = await fetch(API_ENDPOINT, {
+        const response = await fetch(getApiEndpoint(), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -85,14 +87,14 @@ async function graphqlRequest(query, variables = {}) {
                 variables
             })
         });
-        
+
         const result = await response.json();
-        
+
         if (result.errors) {
             console.error('GraphQL errors:', result.errors);
             throw new Error(result.errors[0].message);
         }
-        
+
         return result.data;
     } catch (error) {
         console.error('API request failed:', error);
@@ -116,15 +118,15 @@ async function loadDashboard() {
                 }
             }
         `;
-        
+
         const data = await graphqlRequest(query);
         containers = data.containers || [];
-        
+
         updateDashboardStats();
         displayRecentContainers();
     } catch (error) {
         console.error('Failed to load dashboard:', error);
-        document.getElementById('recent-containers').innerHTML = 
+        document.getElementById('recent-containers').innerHTML =
             '<p class="error">Failed to load containers. Please check your connection.</p>';
     }
 }
@@ -134,7 +136,7 @@ function updateDashboardStats() {
     const total = containers.length;
     const running = containers.filter(c => c.status === 'running').length;
     const stopped = containers.filter(c => c.status === 'stopped').length;
-    
+
     document.getElementById('total-containers').textContent = total;
     document.getElementById('running-containers').textContent = running;
     document.getElementById('stopped-containers').textContent = stopped;
@@ -144,12 +146,12 @@ function updateDashboardStats() {
 // Display recent containers
 function displayRecentContainers() {
     const container = document.getElementById('recent-containers');
-    
+
     if (containers.length === 0) {
         container.innerHTML = '<p class="loading">No containers yet. Create your first one!</p>';
         return;
     }
-    
+
     const recentContainers = containers.slice(0, 5);
     container.innerHTML = recentContainers.map(c => createContainerCard(c)).join('');
 }
@@ -171,14 +173,14 @@ async function loadAllContainers() {
                 }
             }
         `;
-        
+
         const data = await graphqlRequest(query);
         containers = data.containers || [];
-        
+
         displayAllContainers();
     } catch (error) {
         console.error('Failed to load containers:', error);
-        document.getElementById('all-containers').innerHTML = 
+        document.getElementById('all-containers').innerHTML =
             '<p class="error">Failed to load containers.</p>';
     }
 }
@@ -186,12 +188,12 @@ async function loadAllContainers() {
 // Display all containers
 function displayAllContainers() {
     const container = document.getElementById('all-containers');
-    
+
     if (containers.length === 0) {
         container.innerHTML = '<p class="loading">No containers found.</p>';
         return;
     }
-    
+
     container.innerHTML = containers.map(c => createContainerCard(c, true)).join('');
 }
 
@@ -199,7 +201,7 @@ function displayAllContainers() {
 function createContainerCard(container, showActions = false) {
     const statusClass = container.status === 'running' ? 'running' : 'stopped';
     const url = `http://${container.subdomain}.pandaserver.ddns.net`;
-    
+
     return `
         <div class="container-card">
             <div class="container-info">
@@ -213,10 +215,10 @@ function createContainerCard(container, showActions = false) {
             </div>
             ${showActions ? `
                 <div class="container-actions">
-                    ${container.status === 'running' 
-                        ? `<button class="btn btn-small btn-secondary" onclick="stopContainer('${container.id}')">Stop</button>`
-                        : `<button class="btn btn-small btn-success" onclick="startContainer('${container.id}')">Start</button>`
-                    }
+                    ${container.status === 'running'
+                ? `<button class="btn btn-small btn-secondary" onclick="stopContainer('${container.id}')">Stop</button>`
+                : `<button class="btn btn-small btn-success" onclick="startContainer('${container.id}')">Start</button>`
+            }
                     <button class="btn btn-small btn-danger" onclick="deleteContainer('${container.id}')">Delete</button>
                 </div>
             ` : ''}
@@ -232,7 +234,7 @@ async function createContainer(formData) {
         const tag = formData.get('tag') || 'latest';
         const subdomain = formData.get('subdomain');
         const port = parseInt(formData.get('port'));
-        
+
         let environment = {};
         const envInput = formData.get('environment');
         if (envInput && envInput.trim()) {
@@ -243,10 +245,10 @@ async function createContainer(formData) {
                 return;
             }
         }
-        
+
         const cpuLimit = formData.get('cpu_limit') ? parseFloat(formData.get('cpu_limit')) : null;
         const memoryLimit = formData.get('memory_limit') ? parseInt(formData.get('memory_limit')) : null;
-        
+
         const mutation = `
             mutation CreateContainer($input: ContainerInput!) {
                 createContainer(input: $input) {
@@ -256,7 +258,7 @@ async function createContainer(formData) {
                 }
             }
         `;
-        
+
         const variables = {
             input: {
                 name,
@@ -269,18 +271,18 @@ async function createContainer(formData) {
                 memoryLimit: memoryLimit ? memoryLimit.toString() + 'M' : null
             }
         };
-        
+
         showNotification('Creating container...', 'info');
-        
+
         const data = await graphqlRequest(mutation, variables);
-        
+
         showNotification(`Container "${data.createContainer.name}" created successfully!`, 'success');
-        
+
         // Reset form and switch to containers view
         document.getElementById('create-container-form').reset();
         switchView('containers');
         loadAllContainers();
-        
+
     } catch (error) {
         console.error('Failed to create container:', error);
         showNotification('Failed to create container: ' + error.message, 'error');
@@ -298,7 +300,7 @@ async function startContainer(id) {
                 }
             }
         `;
-        
+
         await graphqlRequest(mutation, { id });
         showNotification('Container started successfully', 'success');
         loadAllContainers();
@@ -318,7 +320,7 @@ async function stopContainer(id) {
                 }
             }
         `;
-        
+
         await graphqlRequest(mutation, { id });
         showNotification('Container stopped successfully', 'success');
         loadAllContainers();
@@ -332,14 +334,14 @@ async function deleteContainer(id) {
     if (!confirm('Are you sure you want to delete this container?')) {
         return;
     }
-    
+
     try {
         const mutation = `
             mutation DeleteContainer($id: ID!) {
                 deleteContainer(id: $id)
             }
         `;
-        
+
         await graphqlRequest(mutation, { id });
         showNotification('Container deleted successfully', 'success');
         loadAllContainers();
@@ -360,7 +362,7 @@ async function checkConnection() {
     try {
         const query = `query { containers { id } }`;
         await graphqlRequest(query);
-        
+
         const statusEl = document.getElementById('connection-status');
         if (statusEl) {
             statusEl.textContent = 'Connected';
@@ -380,7 +382,7 @@ function showNotification(message, type = 'info') {
     const notification = document.getElementById('notification');
     notification.textContent = message;
     notification.className = `notification ${type} show`;
-    
+
     setTimeout(() => {
         notification.classList.remove('show');
     }, 3000);
@@ -389,7 +391,7 @@ function showNotification(message, type = 'info') {
 // Initialize Pyodide (WebAssembly Python runtime)
 async function initPyodide() {
     if (pyodide) return pyodide;
-    
+
     try {
         console.log('Loading Pyodide...');
         pyodide = await loadPyodide();
@@ -421,29 +423,29 @@ function initTemplateSystem() {
     const modalCancelBtn = document.getElementById('modal-cancel-btn');
     const modalBackBtn = document.getElementById('modal-back-btn');
     const modalOverlay = modal?.querySelector('.modal-overlay');
-    
+
     if (dropdownBtn) {
         dropdownBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleDropdown();
         });
     }
-    
+
     if (mainBtn) {
         mainBtn.addEventListener('click', () => {
             // Main button always opens Custom template in modal
             openModal('custom', 'custom');
         });
     }
-    
+
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
-        if (dropdown && !dropdown.contains(e.target) && 
+        if (dropdown && !dropdown.contains(e.target) &&
             e.target !== dropdownBtn && e.target !== mainBtn) {
             closeDropdown();
         }
     });
-    
+
     // Setup dropdown items
     const dropdownItems = document.querySelectorAll('.dropdown-item');
     dropdownItems.forEach(item => {
@@ -461,27 +463,27 @@ function initTemplateSystem() {
             }
         });
     });
-    
+
     // Setup modal close buttons
     if (modalCloseBtn) {
         modalCloseBtn.addEventListener('click', closeModal);
     }
-    
+
     if (modalCancelBtn) {
         modalCancelBtn.addEventListener('click', closeModal);
     }
-    
+
     if (modalOverlay) {
         modalOverlay.addEventListener('click', closeModal);
     }
-    
+
     // Setup modal back button
     if (modalBackBtn) {
         modalBackBtn.addEventListener('click', () => {
             backToModalSelection();
         });
     }
-    
+
     // Setup modal form submission
     const modalForm = document.getElementById('modal-container-form');
     if (modalForm) {
@@ -492,7 +494,7 @@ function initTemplateSystem() {
         };
         modalForm.addEventListener('submit', modalForm._submitHandler);
     }
-    
+
     // Close modal on Escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && modal?.classList.contains('show')) {
@@ -521,21 +523,21 @@ function closeDropdown() {
 function selectCategory(category) {
     selectedCategory = category;
     const categoryData = CONTAINER_TEMPLATES[category];
-    
+
     if (!categoryData) {
         console.error('Category not found:', category);
         return;
     }
-    
+
     // Show template selection area
     const selectionArea = document.getElementById('template-selection');
     const titleEl = document.getElementById('template-category-title');
     const typesContainer = document.getElementById('template-types');
-    
+
     if (titleEl) {
         titleEl.textContent = `${categoryData.icon} ${categoryData.name}`;
     }
-    
+
     // Generate template type cards
     const types = Object.keys(categoryData.types).map(typeKey => {
         const type = categoryData.types[typeKey];
@@ -544,7 +546,7 @@ function selectCategory(category) {
             ...type
         };
     });
-    
+
     if (typesContainer) {
         typesContainer.innerHTML = types.map(type => `
             <div class="template-card" data-type="${type.id}">
@@ -555,7 +557,7 @@ function selectCategory(category) {
                 </div>
             </div>
         `).join('');
-        
+
         // Add click handlers to template cards
         const cards = typesContainer.querySelectorAll('.template-card');
         cards.forEach(card => {
@@ -565,7 +567,7 @@ function selectCategory(category) {
             });
         });
     }
-    
+
     if (selectionArea) {
         selectionArea.style.display = 'block';
     }
@@ -596,7 +598,7 @@ function getTypeIcon(category, type) {
             custom: '📦'
         }
     };
-    
+
     return icons[category]?.[type] || '📦';
 }
 
@@ -605,12 +607,12 @@ function selectTemplate(category, type) {
     selectedCategory = category;
     selectedType = type;
     currentTemplate = getTemplate(category, type);
-    
+
     if (!currentTemplate) {
         console.error('Template not found:', category, type);
         return;
     }
-    
+
     showTemplateForm(category, type);
 }
 
@@ -618,36 +620,36 @@ function selectTemplate(category, type) {
 function showTemplateForm(category, type) {
     const template = getTemplate(category, type);
     if (!template) return;
-    
+
     // Hide template selection
     const selectionArea = document.getElementById('template-selection');
     if (selectionArea) {
         selectionArea.style.display = 'none';
     }
-    
+
     // Show form
     const form = document.getElementById('create-container-form');
     const formTitle = document.getElementById('form-title');
     const dynamicFields = document.getElementById('dynamic-form-fields');
-    
+
     if (formTitle) {
         const categoryData = CONTAINER_TEMPLATES[category];
         formTitle.textContent = `${categoryData.icon} ${template.name} Configuration`;
     }
-    
+
     // Set hidden fields
     document.getElementById('selected-category').value = category;
     document.getElementById('selected-type').value = type;
-    
+
     // Generate form fields
     if (dynamicFields) {
         dynamicFields.innerHTML = generateFormFields(template);
     }
-    
+
     if (form) {
         form.style.display = 'block';
     }
-    
+
     // Setup dynamic interactions
     setupFormInteractions();
 }
@@ -655,7 +657,7 @@ function showTemplateForm(category, type) {
 // Generate form fields based on template
 function generateFormFields(template) {
     let html = '';
-    
+
     // Container Name
     html += `
         <div class="form-group">
@@ -666,7 +668,7 @@ function generateFormFields(template) {
             <small class="helper-text">Lowercase letters, numbers, and hyphens only</small>
         </div>
     `;
-    
+
     // Image Selection
     if (!template.advanced) {
         html += `
@@ -679,7 +681,7 @@ function generateFormFields(template) {
                 </div>
             </div>
         `;
-        
+
         // Tag Selection
         if (template.tags && template.tags.length > 0) {
             html += `
@@ -710,7 +712,7 @@ function generateFormFields(template) {
             </div>
         `;
     }
-    
+
     // Subdomain and Port
     html += `
         <div class="form-row">
@@ -727,7 +729,7 @@ function generateFormFields(template) {
             </div>
         </div>
     `;
-    
+
     // Environment Variables
     if (template.envVars && template.envVars.length > 0) {
         html += `
@@ -739,7 +741,7 @@ function generateFormFields(template) {
             </div>
         `;
     }
-    
+
     // Resource Limits
     html += `
         <div class="form-section">
@@ -764,7 +766,7 @@ function generateFormFields(template) {
             </div>
         </div>
     `;
-    
+
     return html;
 }
 
@@ -774,9 +776,9 @@ function generateEnvVarField(envVar, index) {
     const isOptional = envVar.optional || false;
     const fieldId = `env-${index}`;
     const inputId = `env-input-${index}`;
-    
+
     let inputHtml = '';
-    
+
     switch (envVar.type) {
         case 'text':
         case 'password':
@@ -786,7 +788,7 @@ function generateEnvVarField(envVar, index) {
                        ${!isOptional ? 'disabled' : ''} />
             `;
             break;
-            
+
         case 'number':
             inputHtml = `
                 <input type="number" id="${inputId}" 
@@ -796,7 +798,7 @@ function generateEnvVarField(envVar, index) {
                        ${!isOptional ? 'disabled' : ''} />
             `;
             break;
-            
+
         case 'select':
             inputHtml = `
                 <select id="${inputId}" ${!isOptional ? 'disabled' : ''}>
@@ -808,7 +810,7 @@ function generateEnvVarField(envVar, index) {
                 </select>
             `;
             break;
-            
+
         case 'checkbox':
             return `
                 <div class="env-var-item">
@@ -823,14 +825,14 @@ function generateEnvVarField(envVar, index) {
                     </div>
                 </div>
             `;
-            
+
         case 'hidden':
             return `<input type="hidden" data-key="${envVar.key}" value="${envVar.default}" />`;
-            
+
         default:
             inputHtml = `<input type="text" id="${inputId}" placeholder="${envVar.default || ''}" disabled />`;
     }
-    
+
     return `
         <div class="env-var-item">
             <div class="env-var-checkbox">
@@ -859,7 +861,7 @@ function setupFormInteractions() {
     envVarItems.forEach(item => {
         const checkbox = item.querySelector('input[type="checkbox"]');
         const inputs = item.querySelectorAll('.env-var-input input:not([type="hidden"]), .env-var-input select');
-        
+
         if (checkbox && !checkbox.disabled) {
             inputs.forEach(input => {
                 input.disabled = !checkbox.checked;
@@ -872,7 +874,7 @@ function setupFormInteractions() {
 function toggleEnvVarInput(checkboxId, inputId) {
     const checkbox = document.getElementById(checkboxId);
     const input = document.getElementById(inputId);
-    
+
     if (checkbox && input) {
         input.disabled = !checkbox.checked;
         if (!checkbox.checked) {
@@ -885,12 +887,12 @@ function toggleEnvVarInput(checkboxId, inputId) {
 function backToSelection() {
     const form = document.getElementById('create-container-form');
     const selectionArea = document.getElementById('template-selection');
-    
+
     if (form) {
         form.style.display = 'none';
         form.reset();
     }
-    
+
     if (selectionArea) {
         selectionArea.style.display = 'block';
     }
@@ -901,7 +903,7 @@ async function submitTemplateForm() {
     try {
         const form = document.getElementById('create-container-form');
         const formData = new FormData(form);
-        
+
         // Collect basic data
         const name = formData.get('name');
         const image = formData.get('image');
@@ -910,19 +912,19 @@ async function submitTemplateForm() {
         const port = parseInt(formData.get('port'));
         const cpuLimit = formData.get('cpu_limit') ? parseFloat(formData.get('cpu_limit')) : null;
         const memoryLimit = formData.get('memory_limit') ? parseInt(formData.get('memory_limit')) : null;
-        
+
         // Collect environment variables
         const environment = {};
-        
+
         // Get all env var items
         const envVarItems = document.querySelectorAll('.env-var-item');
         envVarItems.forEach(item => {
             const checkbox = item.querySelector('input[type="checkbox"]');
             const hiddenInput = item.querySelector('input[type="hidden"][data-key]');
-            
+
             if (hiddenInput) {
                 const key = hiddenInput.dataset.key;
-                
+
                 // For checkbox type env vars
                 if (checkbox && !hiddenInput.dataset.input) {
                     // Always set TRUE or FALSE for checkbox env vars
@@ -940,7 +942,7 @@ async function submitTemplateForm() {
                 }
             }
         });
-        
+
         // Get hidden env vars (like TYPE for Minecraft)
         const hiddenEnvVars = document.querySelectorAll('input[type="hidden"][data-key]');
         hiddenEnvVars.forEach(input => {
@@ -948,13 +950,13 @@ async function submitTemplateForm() {
                 environment[input.dataset.key] = input.value;
             }
         });
-        
+
         // Validate required fields
         if (!name || !image || !subdomain || !port) {
             showNotification('Please fill in all required fields', 'error');
             return;
         }
-        
+
         // Create container via GraphQL
         const mutation = `
             mutation CreateContainer($input: ContainerInput!) {
@@ -965,7 +967,7 @@ async function submitTemplateForm() {
                 }
             }
         `;
-        
+
         const variables = {
             input: {
                 name,
@@ -978,13 +980,13 @@ async function submitTemplateForm() {
                 memoryLimit: memoryLimit ? memoryLimit.toString() + 'M' : null
             }
         };
-        
+
         showNotification('Creating container...', 'info');
-        
+
         const data = await graphqlRequest(mutation, variables);
-        
+
         showNotification(`Container "${data.createContainer.name}" created successfully!`, 'success');
-        
+
         // Reset and switch view
         form.reset();
         form.style.display = 'none';
@@ -992,10 +994,10 @@ async function submitTemplateForm() {
         if (selectionArea) {
             selectionArea.style.display = 'none';
         }
-        
+
         switchView('containers');
         loadAllContainers();
-        
+
     } catch (error) {
         console.error('Failed to create container:', error);
         showNotification('Failed to create container: ' + error.message, 'error');
@@ -1012,29 +1014,29 @@ function openModal(category, type) {
     const modalTitle = document.getElementById('modal-title');
     const modalForm = document.getElementById('modal-container-form');
     const modalSelection = document.getElementById('modal-template-selection');
-    
+
     if (!modal) return;
-    
+
     // Show modal
     modal.classList.add('show');
     document.body.style.overflow = 'hidden'; // Prevent background scrolling
-    
+
     // Hide both selection and form initially
     if (modalSelection) modalSelection.style.display = 'none';
     if (modalForm) modalForm.style.display = 'none';
-    
+
     // Load template and show form
     const template = getTemplate(category, type);
     if (template) {
         selectedCategory = category;
         selectedType = type;
         currentTemplate = template;
-        
+
         const categoryData = CONTAINER_TEMPLATES[category];
         if (modalTitle) {
             modalTitle.textContent = `${categoryData.icon} ${template.name}`;
         }
-        
+
         // No back button when opening directly
         showModalForm(category, type, false);
     }
@@ -1048,34 +1050,34 @@ function openModalWithCategory(category) {
     const modalSelection = document.getElementById('modal-template-selection');
     const modalCategoryTitle = document.getElementById('modal-template-category-title');
     const modalTypesContainer = document.getElementById('modal-template-types');
-    
+
     if (!modal) return;
-    
+
     selectedCategory = category;
     const categoryData = CONTAINER_TEMPLATES[category];
-    
+
     if (!categoryData) {
         console.error('Category not found:', category);
         return;
     }
-    
+
     // Show modal
     modal.classList.add('show');
     document.body.style.overflow = 'hidden';
-    
+
     // Hide form, show selection
     if (modalForm) modalForm.style.display = 'none';
     if (modalSelection) modalSelection.style.display = 'block';
-    
+
     // Set titles
     if (modalTitle) {
         modalTitle.textContent = `${categoryData.icon} ${categoryData.name}`;
     }
-    
+
     if (modalCategoryTitle) {
         modalCategoryTitle.textContent = 'Select Template Type';
     }
-    
+
     // Generate template type cards
     const types = Object.keys(categoryData.types).map(typeKey => {
         const type = categoryData.types[typeKey];
@@ -1084,7 +1086,7 @@ function openModalWithCategory(category) {
             ...type
         };
     });
-    
+
     if (modalTypesContainer) {
         modalTypesContainer.innerHTML = types.map(type => `
             <div class="template-card" data-type="${type.id}">
@@ -1095,7 +1097,7 @@ function openModalWithCategory(category) {
                 </div>
             </div>
         `).join('');
-        
+
         // Add click handlers to template cards
         const cards = modalTypesContainer.querySelectorAll('.template-card');
         cards.forEach(card => {
@@ -1112,12 +1114,12 @@ function selectModalTemplate(category, type) {
     selectedCategory = category;
     selectedType = type;
     currentTemplate = getTemplate(category, type);
-    
+
     if (!currentTemplate) {
         console.error('Template not found:', category, type);
         return;
     }
-    
+
     // Show back button since we came from template selection
     showModalForm(category, type, true);
 }
@@ -1126,44 +1128,44 @@ function selectModalTemplate(category, type) {
 function showModalForm(category, type, showBackButton = false) {
     const template = getTemplate(category, type);
     if (!template) return;
-    
+
     const modalSelection = document.getElementById('modal-template-selection');
     const modalForm = document.getElementById('modal-container-form');
     const modalFormTitle = document.getElementById('modal-form-title');
     const modalDynamicFields = document.getElementById('modal-dynamic-form-fields');
     const modalTitle = document.getElementById('modal-title');
     const modalBackBtn = document.getElementById('modal-back-btn');
-    
+
     // Hide selection, show form
     if (modalSelection) modalSelection.style.display = 'none';
     if (modalForm) modalForm.style.display = 'block';
-    
+
     // Show/hide back button based on context
     if (modalBackBtn) {
         modalBackBtn.style.display = showBackButton ? 'inline-flex' : 'none';
     }
-    
+
     // Set titles
     const categoryData = CONTAINER_TEMPLATES[category];
     if (modalTitle) {
         modalTitle.textContent = `${categoryData.icon} Create ${template.name}`;
     }
-    
+
     if (modalFormTitle) {
         modalFormTitle.textContent = 'Configuration';
     }
-    
+
     // Set hidden fields
     const modalCategoryInput = document.getElementById('modal-selected-category');
     const modalTypeInput = document.getElementById('modal-selected-type');
     if (modalCategoryInput) modalCategoryInput.value = category;
     if (modalTypeInput) modalTypeInput.value = type;
-    
+
     // Generate form fields
     if (modalDynamicFields) {
         modalDynamicFields.innerHTML = generateFormFields(template);
     }
-    
+
     // Setup dynamic interactions
     setupModalFormInteractions();
 }
@@ -1173,18 +1175,18 @@ function setupModalFormInteractions() {
     // Initialize disabled states for env var inputs in modal
     const modal = document.getElementById('container-modal');
     const envVarItems = modal.querySelectorAll('.env-var-item');
-    
+
     envVarItems.forEach(item => {
         const checkbox = item.querySelector('input[type="checkbox"]');
         const inputs = item.querySelectorAll('.env-var-input input:not([type="hidden"]), .env-var-input select');
-        
+
         if (checkbox && !checkbox.disabled) {
             inputs.forEach(input => {
                 input.disabled = !checkbox.checked;
             });
         }
     });
-    
+
     // Initialize WASM validator
     if (window.initValidator) {
         window.initValidator().then(() => {
@@ -1193,21 +1195,21 @@ function setupModalFormInteractions() {
             console.warn('⚠️ WASM validator failed to initialize, using JavaScript fallback');
         });
     }
-    
+
     // Real-time validation for container name
     const nameInput = document.getElementById('template-name');
     if (nameInput) {
         let validationTimeout;
         nameInput.addEventListener('input', async (e) => {
             clearTimeout(validationTimeout);
-            
+
             // Show loading indicator
             showValidationStatus(nameInput, 'validating', '🔄 Checking...');
-            
+
             validationTimeout = setTimeout(async () => {
                 if (window.validateContainerName) {
                     const result = await window.validateContainerName(e.target.value);
-                    
+
                     if (result.valid) {
                         showValidationStatus(nameInput, 'valid', '✓ Valid name');
                     } else {
@@ -1217,20 +1219,20 @@ function setupModalFormInteractions() {
             }, 500); // Debounce 500ms
         });
     }
-    
+
     // Real-time validation for subdomain
     const subdomainInput = document.getElementById('template-subdomain');
     if (subdomainInput) {
         let validationTimeout;
         subdomainInput.addEventListener('input', async (e) => {
             clearTimeout(validationTimeout);
-            
+
             showValidationStatus(subdomainInput, 'validating', '🔄 Checking...');
-            
+
             validationTimeout = setTimeout(async () => {
                 if (window.validateSubdomain) {
                     const result = await window.validateSubdomain(e.target.value);
-                    
+
                     if (result.valid) {
                         showValidationStatus(subdomainInput, 'valid', '✓ Valid subdomain');
                     } else {
@@ -1240,14 +1242,14 @@ function setupModalFormInteractions() {
             }, 500);
         });
     }
-    
+
     // Real-time validation for port
     const portInput = document.getElementById('template-port');
     if (portInput) {
         portInput.addEventListener('input', async (e) => {
             if (window.validatePort) {
                 const result = await window.validatePort(e.target.value);
-                
+
                 if (result.valid) {
                     if (result.warning) {
                         showValidationStatus(portInput, 'warning', '⚠️ ' + result.warning);
@@ -1269,10 +1271,10 @@ function showValidationStatus(input, status, message) {
     if (existingMsg) {
         existingMsg.remove();
     }
-    
+
     // Remove existing status classes
     input.classList.remove('input-valid', 'input-invalid', 'input-validating', 'input-warning');
-    
+
     // Add new status
     if (status === 'valid') {
         input.classList.add('input-valid');
@@ -1283,7 +1285,7 @@ function showValidationStatus(input, status, message) {
     } else if (status === 'warning') {
         input.classList.add('input-warning');
     }
-    
+
     // Add validation message
     if (message) {
         const msgEl = document.createElement('div');
@@ -1297,12 +1299,12 @@ function showValidationStatus(input, status, message) {
 function backToModalSelection() {
     const modalForm = document.getElementById('modal-container-form');
     const modalSelection = document.getElementById('modal-template-selection');
-    
+
     if (modalForm) {
         modalForm.style.display = 'none';
         modalForm.reset();
     }
-    
+
     if (modalSelection) {
         modalSelection.style.display = 'block';
     }
@@ -1313,22 +1315,22 @@ function closeModal() {
     const modal = document.getElementById('container-modal');
     const modalForm = document.getElementById('modal-container-form');
     const modalSelection = document.getElementById('modal-template-selection');
-    
+
     if (modal) {
         modal.classList.remove('show');
         document.body.style.overflow = ''; // Restore scrolling
     }
-    
+
     // Reset modal content
     if (modalForm) {
         modalForm.style.display = 'none';
         modalForm.reset();
     }
-    
+
     if (modalSelection) {
         modalSelection.style.display = 'none';
     }
-    
+
     // Reset state
     selectedCategory = null;
     selectedType = null;
@@ -1340,7 +1342,7 @@ async function submitModalForm() {
     try {
         const form = document.getElementById('modal-container-form');
         const formData = new FormData(form);
-        
+
         // Collect basic data
         const name = formData.get('name');
         const image = formData.get('image');
@@ -1349,19 +1351,19 @@ async function submitModalForm() {
         const port = parseInt(formData.get('port'));
         const cpuLimit = formData.get('cpu_limit') ? parseFloat(formData.get('cpu_limit')) : null;
         const memoryLimit = formData.get('memory_limit') ? parseInt(formData.get('memory_limit')) : null;
-        
+
         // Collect environment variables from modal
         const environment = {};
         const modal = document.getElementById('container-modal');
         const envVarItems = modal.querySelectorAll('.env-var-item');
-        
+
         envVarItems.forEach(item => {
             const checkbox = item.querySelector('input[type="checkbox"]');
             const hiddenInput = item.querySelector('input[type="hidden"][data-key]');
-            
+
             if (hiddenInput) {
                 const key = hiddenInput.dataset.key;
-                
+
                 // For checkbox type env vars
                 if (checkbox && !hiddenInput.dataset.input) {
                     // Always set TRUE or FALSE for checkbox env vars
@@ -1379,7 +1381,7 @@ async function submitModalForm() {
                 }
             }
         });
-        
+
         // Get hidden env vars
         const hiddenEnvVars = modal.querySelectorAll('input[type="hidden"][data-key]');
         hiddenEnvVars.forEach(input => {
@@ -1387,13 +1389,13 @@ async function submitModalForm() {
                 environment[input.dataset.key] = input.value;
             }
         });
-        
+
         // Validate required fields
         if (!name || !image || !subdomain || !port) {
             showNotification('Please fill in all required fields', 'error');
             return;
         }
-        
+
         // Create container via GraphQL
         const mutation = `
             mutation CreateContainer($input: ContainerInput!) {
@@ -1404,7 +1406,7 @@ async function submitModalForm() {
                 }
             }
         `;
-        
+
         const variables = {
             input: {
                 name,
@@ -1417,18 +1419,18 @@ async function submitModalForm() {
                 memoryLimit: memoryLimit ? memoryLimit.toString() + 'M' : null
             }
         };
-        
+
         showNotification('Creating container...', 'info');
-        
+
         const data = await graphqlRequest(mutation, variables);
-        
+
         showNotification(`Container "${data.createContainer.name}" created successfully!`, 'success');
-        
+
         // Close modal and refresh
         closeModal();
         loadAllContainers();
         loadDashboard();
-        
+
     } catch (error) {
         console.error('Failed to create container:', error);
         showNotification('Failed to create container: ' + error.message, 'error');
