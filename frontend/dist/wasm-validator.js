@@ -97,9 +97,11 @@ async function validateContainerName(name) {
     }
     
     try {
+        // Set the name in Python globals to avoid injection issues
+        py.globals.set('input_name', name);
         const result = await py.runPythonAsync(`
 import json
-json.dumps(validate_container_name('${name.replace(/'/g, "\\'")}'))
+json.dumps(validate_container_name(input_name))
         `);
         return JSON.parse(result);
     } catch (error) {
@@ -116,9 +118,11 @@ async function validateSubdomain(subdomain) {
     }
     
     try {
+        // Set the subdomain in Python globals to avoid injection issues
+        py.globals.set('input_subdomain', subdomain);
         const result = await py.runPythonAsync(`
 import json
-json.dumps(validate_subdomain('${subdomain.replace(/'/g, "\\'")}'))
+json.dumps(validate_subdomain(input_subdomain))
         `);
         return JSON.parse(result);
     } catch (error) {
@@ -135,9 +139,11 @@ async function validatePort(port) {
     }
     
     try {
+        // Set the port in Python globals to avoid injection issues
+        py.globals.set('input_port', port);
         const result = await py.runPythonAsync(`
 import json
-json.dumps(validate_port('${port}'))
+json.dumps(validate_port(input_port))
         `);
         return JSON.parse(result);
     } catch (error) {
