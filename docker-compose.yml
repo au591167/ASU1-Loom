@@ -89,7 +89,6 @@ networks:
   loom_network:
     name: loom_network
     driver: bridge
-    external: true
 
 volumes:
   traefik_certs:
