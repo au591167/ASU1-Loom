@@ -925,9 +925,8 @@ async function submitTemplateForm() {
                 
                 // For checkbox type env vars
                 if (checkbox && !hiddenInput.dataset.input) {
-                    if (checkbox.checked) {
-                        environment[key] = 'true';
-                    }
+                    // Always set TRUE or FALSE for checkbox env vars
+                    environment[key] = checkbox.checked ? 'TRUE' : 'FALSE';
                 }
                 // For other types with checkbox toggle
                 else if (checkbox && hiddenInput.dataset.input) {
@@ -1365,9 +1364,8 @@ async function submitModalForm() {
                 
                 // For checkbox type env vars
                 if (checkbox && !hiddenInput.dataset.input) {
-                    if (checkbox.checked) {
-                        environment[key] = 'true';
-                    }
+                    // Always set TRUE or FALSE for checkbox env vars
+                    environment[key] = checkbox.checked ? 'TRUE' : 'FALSE';
                 }
                 // For other types with checkbox toggle
                 else if (checkbox && hiddenInput.dataset.input) {
